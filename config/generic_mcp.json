@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "revit-2024-readonly": {
+      "command": "C:\Users\<YOU>\AppData\Local\ABRevitMcp\Server\AB.RevitMcp.Server.exe",
+      "args": ["--revit-version", "2024", "--read-only", "--timeout", "30000"],
+      "env": {}
+    },
+    "revit": {
+      "command": "C:\Users\<YOU>\AppData\Local\ABRevitMcp\Server\AB.RevitMcp.Server.exe",
+      "args": [],
+      "env": {
+        "AB_REVITMCP_TIMEOUT_MS": "30000"
+      }
+    }
+  }
+}

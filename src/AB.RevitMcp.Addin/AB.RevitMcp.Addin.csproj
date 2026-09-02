@@ -1,0 +1,133 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    ============================================================================
+     Revit add-in - multi-targeted across the .NET runtime transition
+    ============================================================================
+       Revit 2020 - 2024   .NET Framework 4.8      -> net48
+       Revit 2025 - 2027   .NET 8 (Windows)        -> net8.0-windows
+
+     Build one specific release:
+       dotnet build -c Release -f net48          -p:RevitVersion=2022
+       dotnet build -c Release -f net8.0-windows -p:RevitVersion=2026
+
+     build/build-all.ps1 loops the whole matrix.
+  -->
+
+  <PropertyGroup>
+    <TargetFrameworks>net48;net8.0-windows</TargetFrameworks>
+    <RootNamespace>AB.RevitMcp.Addin</RootNamespace>
+    <AssemblyName>AB.RevitMcp.Addin</AssemblyName>
+    <PlatformTarget>x64</PlatformTarget>
+    <UseWPF>true</UseWPF>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <EnableDefaultNoneItems>false</EnableDefaultNoneItems>
+  </PropertyGroup>
+
+  <!-- Default Revit release per runtime. Override on the command line. -->
+  <PropertyGroup>
+    <RevitVersion Condition="'$(RevitVersion)' == '' and '$(TargetFramework)' == 'net48'">2024</RevitVersion>
+    <RevitVersion Condition="'$(RevitVersion)' == '' and '$(TargetFramework)' == 'net8.0-windows'">2026</RevitVersion>
+    <RevitVersion Condition="'$(RevitVersion)' == ''">2024</RevitVersion>
+    <RevitApiDir Condition="'$(RevitApiDir)' == ''">$(RevitProgramRoot)\Revit $(RevitVersion)</RevitApiDir>
+    <OutputPath>$(MSBuildThisFileDirectory)..\..\artifacts\$(Configuration)\Revit$(RevitVersion)\</OutputPath>
+
+    <!--
+      AppendTargetFrameworkToOutputPath=false above applies to the INTERMEDIATE path too, so both
+      target frameworks would otherwise generate into the same obj\$(Configuration) folder and
+      clobber each other's AssemblyInfo.cs. That only breaks when the two TFMs build together
+      (a plain `dotnet build`), which makes it exactly the kind of bug that hides until CI.
+      Keep the intermediate output separated per framework and per Revit release.
+    -->
+    <IntermediateOutputPath>obj\$(Configuration)\$(TargetFramework)\Revit$(RevitVersion)\</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <!--
+    Version gates for the Revit API breaking changes we actually have to handle:
+      2021+  ForgeTypeId / UnitTypeId replace DisplayUnitType
+      2022+  Definition.GetDataType() replaces GetSpecTypeId(); Floor.Create(...) replaces NewFloor
+      2023+  Category.BuiltInCategory property
+      2024+  ElementId.Value (long) replaces ElementId.IntegerValue; Document.GetUnusedElements
+      2025+  .NET 8 runtime
+  -->
+  <PropertyGroup>
+    <DefineConstants>$(DefineConstants);REVIT$(RevitVersion)</DefineConstants>
+    <DefineConstants Condition="'$(RevitVersion)' &gt;= '2021'">$(DefineConstants);REVIT2021_OR_GREATER</DefineConstants>
+    <DefineConstants Condition="'$(RevitVersion)' &gt;= '2022'">$(DefineConstants);REVIT2022_OR_GREATER</DefineConstants>
+    <DefineConstants Condition="'$(RevitVersion)' &gt;= '2023'">$(DefineConstants);REVIT2023_OR_GREATER</DefineConstants>
+    <DefineConstants Condition="'$(RevitVersion)' &gt;= '2024'">$(DefineConstants);REVIT2024_OR_GREATER</DefineConstants>
+    <DefineConstants Condition="'$(RevitVersion)' &gt;= '2025'">$(DefineConstants);REVIT2025_OR_GREATER</DefineConstants>
+    <DefineConstants Condition="'$(RevitVersion)' &gt;= '2026'">$(DefineConstants);REVIT2026_OR_GREATER</DefineConstants>
+    <DefineConstants Condition="'$(RevitVersion)' &gt;= '2027'">$(DefineConstants);REVIT2027_OR_GREATER</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AB.RevitMcp.Contracts\AB.RevitMcp.Contracts.csproj" />
+    <ProjectReference Include="..\AB.RevitMcp.Ipc\AB.RevitMcp.Ipc.csproj" />
+  </ItemGroup>
+
+  <!--
+    Revit assemblies are referenced straight out of the install folder and NEVER copied to the
+    output: Revit loads its own copies, and shipping a second one is a guaranteed type-identity bug.
+  -->
+  <ItemGroup>
+    <Reference Include="RevitAPI">
+      <HintPath>$(RevitApiDir)\RevitAPI.dll</HintPath>
+      <Private>false</Private>
+      <SpecificVersion>false</SpecificVersion>
+    </Reference>
+    <Reference Include="RevitAPIUI">
+      <HintPath>$(RevitApiDir)\RevitAPIUI.dll</HintPath>
+      <Private>false</Private>
+      <SpecificVersion>false</SpecificVersion>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <Reference Include="System.Core" />
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="WindowsBase" />
+    <Reference Include="System.Xaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Manifests\**\*.addin" CopyToOutputDirectory="Never" />
+  </ItemGroup>
+
+  <!--
+    Author branding rides inside the assembly. Loose icon files beside the add-in would have to be
+    copied by the installer into every Revit release folder; embedding keeps that folder to three
+    DLLs and removes a whole class of "works on my machine" deployment bug.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\linkedin_16.ico">
+      <LogicalName>AB.RevitMcp.Addin.Resources.linkedin_16.ico</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\linkedin_32.ico">
+      <LogicalName>AB.RevitMcp.Addin.Resources.linkedin_32.ico</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\logo_16.png">
+      <LogicalName>AB.RevitMcp.Addin.Resources.logo_16.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\logo_32.png">
+      <LogicalName>AB.RevitMcp.Addin.Resources.logo_32.png</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <Target Name="ValidateRevitApi" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(RevitApiDir)\RevitAPI.dll')"
+           Text="RevitAPI.dll was not found at '$(RevitApiDir)'. Install Revit $(RevitVersion), or pass -p:RevitApiDir=&lt;folder containing RevitAPI.dll&gt;." />
+    <Error Condition="'$(TargetFramework)' == 'net48' and '$(RevitVersion)' &gt;= '2025'"
+           Text="Revit $(RevitVersion) runs on .NET 8. Build it with -f net8.0-windows." />
+    <Error Condition="'$(TargetFramework)' == 'net8.0-windows' and '$(RevitVersion)' &lt; '2025'"
+           Text="Revit $(RevitVersion) runs on .NET Framework 4.8. Build it with -f net48." />
+  </Target>
+
+  <Target Name="ReportRevitTarget" AfterTargets="Build">
+    <Message Importance="high" Text="  -> AB.RevitMcp.Addin built for Revit $(RevitVersion) ($(TargetFramework)) into $(OutputPath)" />
+  </Target>
+
+</Project>

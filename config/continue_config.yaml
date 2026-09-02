@@ -1,0 +1,5 @@
+# Continue uses YAML, not JSON: %USERPROFILE%\.continue\config.yaml
+mcpServers:
+  - name: revit
+    command: C:\Users\<YOU>\AppData\Local\ABRevitMcp\Server\AB.RevitMcp.Server.exe
+    args: []

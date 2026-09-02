@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!--
+      A stand-in for the Revit add-in: it publishes a discovery endpoint and answers a handful of
+      tools with canned data. Used to prove the MCP client -> server -> pipe chain works before
+      Revit is involved, and to let a user validate their mcpServers config without opening Revit.
+    -->
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>AB.RevitMcp.MockBridge</RootNamespace>
+    <AssemblyName>AB.RevitMcp.MockBridge</AssemblyName>
+    <PlatformTarget>x64</PlatformTarget>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>$(MSBuildThisFileDirectory)..\..\artifacts\$(Configuration)\MockBridge\</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AB.RevitMcp.Contracts\AB.RevitMcp.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\AB.RevitMcp.Ipc\AB.RevitMcp.Ipc.csproj" />
+  </ItemGroup>
+
+</Project>

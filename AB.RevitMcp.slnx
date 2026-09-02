@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/installer/">
+    <Project Path="installer/AB.RevitMcp.Setup/AB.RevitMcp.Setup.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/AB.RevitMcp.Addin/AB.RevitMcp.Addin.csproj" />
+    <Project Path="src/AB.RevitMcp.Contracts/AB.RevitMcp.Contracts.csproj" />
+    <Project Path="src/AB.RevitMcp.Ipc/AB.RevitMcp.Ipc.csproj" />
+    <Project Path="src/AB.RevitMcp.Server/AB.RevitMcp.Server.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/AB.RevitMcp.MockBridge/AB.RevitMcp.MockBridge.csproj" />
+  </Folder>
+</Solution>

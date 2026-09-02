@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!--
+      netstandard2.0 is the only TFM consumable by BOTH the .NET Framework 4.8 add-in
+      (Revit 2020-2024) and the .NET 8 add-in / server (Revit 2025+). This assembly has ZERO
+      package references on purpose: anything shipped into the Revit process is a potential
+      assembly-binding conflict with Revit's own dependencies (Newtonsoft.Json, System.Text.Json,
+      System.Memory, ...), so the JSON stack here is hand-rolled and fully self-contained.
+    -->
+    <!--
+      MUST multi-target, and net48 is not optional.
+
+      A netstandard2.0 assembly carries a reference to the `netstandard, Version=2.0.0.0` facade.
+      Revit 2020-2024 host .NET Framework with a Revit.exe.config that declares .NET 4.7 and has no
+      binding redirect for that facade, so the CLR fails to resolve it. Revit then swallows the
+      FileNotFoundException and reports the misleading dialog:
+
+          "Failed to initialize the add-in ... because the assembly ... does not exist"
+
+      naming the TOP-LEVEL add-in DLL, which is present the whole time. Shipping a genuine net48
+      build removes the facade reference entirely and the add-in loads.
+    -->
+    <TargetFrameworks>net48;netstandard2.0;net8.0-windows</TargetFrameworks>
+    <RootNamespace>AB.RevitMcp.Contracts</RootNamespace>
+    <AssemblyName>AB.RevitMcp.Contracts</AssemblyName>
+  </PropertyGroup>
+
+</Project>

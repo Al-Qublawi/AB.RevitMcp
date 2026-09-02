@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "revit": {
+      "type": "stdio",
+      "command": "C:\Users\<YOU>\AppData\Local\ABRevitMcp\Server\AB.RevitMcp.Server.exe",
+      "args": []
+    }
+  }
+}

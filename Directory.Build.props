@@ -1,0 +1,40 @@
+<Project>
+
+  <!--
+    Shared MSBuild settings for the AB Revit MCP Bridge solution.
+
+    Project / target framework matrix
+    ================================
+      AB.RevitMcp.Contracts  netstandard2.0        (loaded by .NET Framework 4.8 AND .NET 8)
+      AB.RevitMcp.Ipc        net48;net8.0-windows  (needs framework-specific pipe security APIs)
+      AB.RevitMcp.Addin      net48;net8.0-windows  (net48 -> Revit 2020-2024, net8 -> Revit 2025+)
+      AB.RevitMcp.Server     net8.0-windows        (standalone MCP process)
+  -->
+
+  <PropertyGroup>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <Company>Abdullah Lotfy</Company>
+    <Authors>Abdullah Lotfy</Authors>
+    <Product>AB Revit MCP Bridge</Product>
+    <Version>1.1.0</Version>
+    <FileVersion>1.1.0.0</FileVersion>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <Copyright>Copyright (c) Abdullah Lotfy</Copyright>
+    <PackageProjectUrl>https://www.linkedin.com/in/abdullahalqublawi/</PackageProjectUrl>
+    <NoWarn>$(NoWarn);CS1591;NU1701;MSB3277;CA1416</NoWarn>
+    <ErrorReport>none</ErrorReport>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <DebugType>portable</DebugType>
+    <RestoreSources>$(RestoreSources);https://api.nuget.org/v3/index.json</RestoreSources>
+  </PropertyGroup>
+
+  <!-- Where the Revit binaries live. Override with -p:RevitProgramRoot=... -->
+  <PropertyGroup>
+    <RevitProgramRoot Condition="'$(RevitProgramRoot)' == ''">C:\Program Files\Autodesk</RevitProgramRoot>
+  </PropertyGroup>
+
+</Project>

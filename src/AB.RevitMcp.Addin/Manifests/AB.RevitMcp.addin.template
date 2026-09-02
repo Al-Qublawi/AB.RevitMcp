@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>AB MCP AI Bridge</Name>
+    <Assembly>{ASSEMBLY_PATH}</Assembly>
+    <AddInId>7f3c9a12-5d84-4b1e-9c67-2a8e5f0d41b3</AddInId>
+    <FullClassName>AB.RevitMcp.Addin.App</FullClassName>
+    <VendorId>ABLOTFY</VendorId>
+    <VendorDescription>Abdullah Lotfy - https://www.linkedin.com/in/abdullahalqublawi/</VendorDescription>
+  </AddIn>
+</RevitAddIns>

@@ -1,0 +1,358 @@
+# AB Revit MCP Bridge
+
+A universal **Model Context Protocol** server that lets any MCP-compatible AI client — Claude
+Desktop, Claude Code, Cursor, VS Code, DeepSeek, Continue, n8n, or anything else that speaks MCP —
+safely **query, create and modify Autodesk Revit models**.
+
+Revit 2020 through 2026. 78 tools. Metric in, metric out. No AI vendor lock-in.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![Revit 2020–2026](https://img.shields.io/badge/Revit-2020--2026-0696D7)
+![Tools](https://img.shields.io/badge/MCP%20tools-78-brightgreen)
+![.NET](https://img.shields.io/badge/.NET-Framework%204.8%20%7C%208.0-512BD4)
+
+**by [Abdullah Lotfy](https://www.linkedin.com/in/abdullahalqublawi/)**
+
+---
+
+## Architecture
+
+```
+   AI / MCP client                MCP server                Revit add-in              Revit
+ ┌──────────────────┐        ┌──────────────────┐      ┌──────────────────┐    ┌─────────────┐
+ │ Claude / Cursor  │ stdio  │ AB.RevitMcp      │ named│ AB.RevitMcp      │    │             │
+ │ VS Code / n8n    │◄──────►│ .Server.exe      │ pipes│ .Addin.dll       │    │  Revit API  │
+ │ DeepSeek / ...   │  HTTP  │                  │◄────►│                  │◄──►│  (UI thread)│
+ └──────────────────┘        │ JSON-RPC 2.0     │ JSON │ ExternalEvent    │    │             │
+                             │ tool catalogue   │      │ + ConcurrentQueue│    └─────────────┘
+                             │ schema validation│      │ + Transactions   │
+                             └──────────────────┘      └──────────────────┘
+      no vendor SDK              own process             inside Revit.exe
+```
+
+The single most important line in the codebase is the boundary between the last two boxes.
+Named-pipe handlers run on thread-pool threads; **the Revit API may only be touched from Revit's
+main UI thread**. `RevitDispatcher` is the only legal crossing: work is queued into a lock-free
+`ConcurrentQueue`, an `ExternalEvent` is raised, and Revit calls back on its own thread when it is
+safe. Nothing else in the add-in calls the Revit API off that thread.
+
+### Projects
+
+| Project | Target | Role |
+| --- | --- | --- |
+| `AB.RevitMcp.Contracts` | `net48` + `netstandard2.0` + `net8.0-windows` | JSON DOM, wire protocol, **the tool catalogue**, schema validator. Zero package references. The real `net48` target is mandatory - see below. |
+| `AB.RevitMcp.Ipc` | `net48` + `net8.0-windows` | Length-prefixed named-pipe framing, ACL'd pipe server/client, endpoint discovery. |
+| `AB.RevitMcp.Addin` | `net48` + `net8.0-windows` | Revit add-in: ribbon, UI-thread dispatcher, transaction policy, 78 tool implementations. |
+| `AB.RevitMcp.Server` | `net8.0-windows` | Standalone MCP server: JSON-RPC over stdio or Streamable HTTP. |
+| `AB.RevitMcp.MockBridge` | `net8.0-windows` | Fake Revit bridge for testing a client configuration without opening Revit. |
+| `AB.RevitMcp.Setup` | `net48` | Single-file installer; every payload rides inside it as a resource. |
+
+The tool catalogue lives in the **shared contracts assembly**, which is why the server can answer
+`tools/list` while Revit is closed, and why a schema and its implementation cannot drift apart —
+`ToolRouter.Register` refuses any handler whose name is not in the catalogue, and
+`revit_bridge_status` reports any catalogue entry that has no handler.
+
+> **Why Contracts must have a real `net48` target.** A `netstandard2.0` assembly references the
+> `netstandard, Version=2.0.0.0` facade. Revit 2020-2024 host .NET Framework with no binding
+> redirect for it, so the CLR fails to resolve the facade and Revit reports
+> *"Failed to initialize the add-in ... because the assembly ... does not exist"* — naming the
+> top-level add-in DLL, which is present the entire time. Shipping a genuine `net48` build of
+> Contracts removes the facade reference and the add-in loads. The Doctor checks for this on every
+> run.
+
+---
+
+## Version compatibility
+
+`AB.RevitMcp.Addin` multi-targets `net48;net8.0-windows` and compiles once per Revit release with
+version symbols, so each breaking API change is handled in exactly one place (`Revit/Compat.cs`,
+`Revit/Metric.cs`):
+
+| Revit | Runtime | Build with | Notable API differences handled |
+| --- | --- | --- | --- |
+| 2020 | .NET Framework 4.8 | `-f net48 -p:RevitVersion=2020` | `DisplayUnitType`, `ParameterType` |
+| 2021 | .NET Framework 4.8 | `-f net48 -p:RevitVersion=2021` | `ForgeTypeId` / `UnitTypeId`, `GetSpecTypeId()` |
+| 2022 | .NET Framework 4.8 | `-f net48 -p:RevitVersion=2022` | `GetDataType()`, `Floor.Create(CurveLoop)` |
+| 2023 | .NET Framework 4.8 | `-f net48 -p:RevitVersion=2023` | `Category.BuiltInCategory` |
+| 2024 | .NET Framework 4.8 | `-f net48 -p:RevitVersion=2024` | `ElementId.Value` (long), `Document.GetUnusedElements` |
+| 2025 | .NET 8 | `-f net8.0-windows -p:RevitVersion=2025` | runtime transition |
+| 2026 | .NET 8 | `-f net8.0-windows -p:RevitVersion=2026` | — |
+
+The `.csproj` errors out with a clear message if you pair the wrong TFM with a release, or if
+`RevitAPI.dll` is missing.
+
+---
+
+## Install
+
+### Option 1 — the installer (recommended, and what you copy to other machines)
+
+Download **`AB.RevitMcp.Setup.exe`** from the [latest release](../../releases/latest).
+Close Revit, then run it:
+
+```
+AB.RevitMcp.Setup.exe
+```
+
+One file, about 32 MB, no prerequisites beyond .NET Framework 4.8 (which Revit itself
+requires). It detects every Revit release on the machine, installs only the ones you tick,
+registers the server with your AI clients, and verifies the result. No admin rights, no
+registry, no services.
+
+> **The published build is not code-signed.** On a managed machine, Windows Defender's
+> Attack Surface Reduction rule *"Block executable files from running unless they meet a
+> prevalence, age, or trusted list criterion"* will block it. See
+> [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the signing pipeline (`build\sign.ps1`) and for
+> what to give IT if you need it allowlisted instead.
+
+For unattended IT deployment:
+
+```
+AB.RevitMcp.Setup.exe /silent             :: every supported release, clients configured
+AB.RevitMcp.Setup.exe /silent /noclients  :: skip AI client registration
+```
+
+Silent runs print to the calling console and always write a log to
+`%TEMP%\ABRevitMcp-Setup-*.log`.
+
+Build the installer yourself with:
+
+```powershell
+.\build\build-installer.ps1
+```
+
+### Option 2 — build and install from source
+
+**Close Revit first** — add-ins load only at startup. Then double-click:
+
+```
+INSTALL.bat
+```
+
+That runs [`build/install.ps1`](build/install.ps1), which:
+
+1. checks prerequisites (PowerShell, .NET Framework 4.8, which Revit releases are present)
+2. builds the add-in for every Revit release found on the machine
+3. publishes the MCP server **self-contained** — no .NET runtime needs to be installed
+4. installs per-user to `%LOCALAPPDATA%\ABRevitMcp` (no elevation, no Program Files, no registry)
+5. writes one `.addin` manifest per Revit release
+6. registers the server with Claude Desktop, Cursor and VS Code (backing up each config first)
+7. runs the **Doctor** to verify the result before you ever start Revit
+
+Prefer the command line, or want finer control:
+
+```powershell
+.\build\install.ps1                          # build + install + verify
+.\build\install.ps1 -Versions 2024           # one release only
+.\build\install.ps1 -ConfigureClients        # also edit AI client configs
+.\build\install.ps1 -SelfContained:$false    # smaller; needs .NET 8 Desktop Runtime
+.\build\install.ps1 -SkipBuild               # reuse an existing artifacts folder
+```
+
+Result:
+
+```
+%APPDATA%\Autodesk\Revit\Addins\2024\AB.RevitMcp.addin      <- manifest
+%APPDATA%\Autodesk\Revit\Addins\2024\ABRevitMcp\*.dll       <- add-in, beside the manifest
+%LOCALAPPDATA%\ABRevitMcp\Server\AB.RevitMcp.Server.exe     <- MCP server (self-contained)
+(diagnostics are a mode of the server: AB.RevitMcp.Server.exe --doctor)
+```
+
+The add-in assemblies sit **beside their manifest under `%APPDATA%`**, referenced by a relative
+path — the layout mainstream Revit add-ins use. They are deliberately *not* placed in
+`%LOCALAPPDATA%`: endpoint-protection suites routinely block DLL loads from Local AppData, and
+Revit reports that as *"the assembly does not exist"* about a file that is plainly on disk. The
+Doctor warns if the add-in ever ends up loading from there.
+
+Then:
+
+1. Start Revit and open a project.
+2. Open the **AB MCP AI** ribbon tab → **Bridge** panel → press **Start Bridge**.
+   The icon turns amber (listening) and then green when a client attaches.
+3. Press **Copy config** to put a ready-to-paste `mcpServers` block on the clipboard.
+
+To remove everything: `UNINSTALL.bat` (or `.\build\uninstall.ps1`).
+
+### Verify without starting Revit
+
+```
+%LOCALAPPDATA%\ABRevitMcp\Server\AB.RevitMcp.Server.exe --doctor
+```
+
+The Doctor reproduces Revit's own load checks from assembly **metadata** — manifest parsing,
+assembly presence, correct runtime per release, and the `netstandard` facade trap that makes Revit
+2020–2024 report *"the assembly does not exist"* about a file that is plainly there. It also starts
+the MCP server and pings a live bridge if one is running.
+
+It never loads a Revit binary: `RevitAPIUI.dll` pulls in Autodesk native resource DLLs that only
+resolve inside `Revit.exe`, and loading it elsewhere makes Windows pop modal
+`AnavRes.dll not found` dialogs.
+
+---
+
+## Connect an MCP client
+
+Templates for each client live in [`config/`](config/). Replace `<YOU>` with your Windows username.
+
+**Claude Desktop** — `%APPDATA%\Claude\claude_desktop_config.json`
+**Claude Code** — `.mcp.json` in the project root, or `claude mcp add revit -- <path to exe>`
+**Cursor** — `%USERPROFILE%\.cursor\mcp.json`
+**VS Code** — `.vscode\mcp.json` (uses `"servers"` instead of `"mcpServers"`)
+
+```json
+{
+  "mcpServers": {
+    "revit": {
+      "command": "C:\\Users\\<YOU>\\AppData\\Local\\ABRevitMcp\\Server\\AB.RevitMcp.Server.exe",
+      "args": [],
+      "env": {}
+    }
+  }
+}
+```
+
+Revit does **not** need to be running when the client starts — the server connects on demand and
+reconnects automatically if Revit restarts.
+
+### Useful flags
+
+| Flag | Effect |
+| --- | --- |
+| `--read-only` | Advertises every tool but refuses all write and destructive calls. |
+| `--revit-version 2024` | Pin to one Revit release when several are open. |
+| `--timeout 30000` | Raise the per-request budget (default 15 s, max 120 s). |
+| `--http --port 3333` | Streamable HTTP on loopback instead of stdio. |
+| `--print-tools` | Print the full tool reference as Markdown. |
+| `--verbose` | Log protocol traffic to stderr. |
+
+Environment equivalents: `AB_REVITMCP_PIPE`, `AB_REVITMCP_REVIT_VERSION`,
+`AB_REVITMCP_TIMEOUT_MS`, `AB_REVITMCP_READONLY`.
+
+---
+
+## The tools
+
+Full generated reference: **[docs/TOOLS.md](docs/TOOLS.md)**
+
+| Category | Count | Transaction behaviour | Gate |
+| --- | ---: | --- | --- |
+| **Read** | 24 | never opens a transaction | none |
+| **Write** | 48 | one `TransactionGroup`, assimilated into a single undo step | none |
+| **Destructive** | 6 | one `TransactionGroup`, rolled back on any failure | `"confirm": true` |
+| **Total** | **78** | | |
+
+**Read** — model info, model health, bridge status, categories, levels, phases, worksets, views,
+active view, view centre, sheets, schedules, warnings, linked models, materials, family types,
+rooms/spaces/areas, grids, MEP systems, element query, text search, element parameters, element
+geometry, current selection.
+
+**Write** — *modelling:* walls, columns, beams, floors, ceilings, family instances, doors, windows,
+levels, grids, rooms, reference planes; *MEP:* ducts, pipes, cable trays, conduit; *annotation:*
+text notes, tags, detail lines, schedules; *views & sheets:* create/duplicate views, sheets,
+viewports, view templates, visibility, graphic overrides, section boxes; *modify:* move, rotate,
+copy, mirror, array, group, split, trim/extend, align, offset, pin, join geometry, cut geometry,
+phase/demolish; *data:* parameter writes, material and workset assignment, Revit selection, family
+loading, export.
+
+**Destructive** — delete elements, delete views, purge unused, unload links, remove links, and
+`revit_execute_code`. That last one is a deliberate escape hatch for work no typed tool covers; it
+is gated behind `confirm: true` like every other destructive tool, and you can remove it entirely
+by running the server with `--read-only`, or by deleting its registration from the catalogue.
+
+---
+
+## Safety model
+
+Layered, and enforced in code rather than documented in prose:
+
+1. **Schema validation twice** — the MCP server validates arguments against the tool's JSON Schema
+   before contacting Revit, and the add-in validates again before touching the API. A malformed
+   request never reaches a transaction.
+2. **The destructive interlock** — `ToolRouter` refuses any destructive tool without a literal
+   `confirm: true` (the string `"true"` does not count), independently of what the handler does.
+   The MCP server refuses it too, so the check survives a rogue client.
+3. **`dryRun`** — destructive tools execute for real and then roll the transaction group back,
+   reporting the exact blast radius including cascade deletions (deleting a wall also removes its
+   doors and windows — the response says so).
+4. **Transaction scoping** — every write runs in a `TransactionGroup`. Success assimilates it into
+   one undo step named after the tool; any exception rolls it back completely. A failure cannot
+   leave the model half-edited.
+5. **No modal dialogs** — a `IFailuresPreprocessor` swallows warnings and rolls back on errors, so
+   an AI-driven session can never hang Revit behind a dialog nobody is watching.
+6. **No arbitrary code execution** — there is no "run this C#/Python" tool, by design. The attack
+   surface is exactly the 46 declared schemas.
+7. **Timeouts and cancellation** — 15 s per request by default. On timeout, queued work is
+   discarded and the caller gets a structured `TIMEOUT`; work already running on the UI thread is
+   allowed to finish, because forcibly aborting Revit's UI thread would corrupt the document.
+8. **Local only** — an ACL'd named pipe restricted to the current Windows user. The HTTP transport
+   binds loopback and validates `Origin` against DNS rebinding. Nothing leaves the machine.
+9. **Opt-in** — no AI can reach the model until a human presses **Start Bridge**.
+
+---
+
+## Units
+
+Revit stores lengths in decimal feet, areas in square feet, volumes in cubic feet and angles in
+radians. **None of that crosses the MCP boundary.** Every crossing goes through `Revit/Metric.cs`:
+
+| Quantity | Unit at the MCP boundary |
+| --- | --- |
+| Length, coordinates | millimetres (mm) |
+| Area | square metres (m²) |
+| Volume | cubic metres (m³) |
+| Angle | degrees |
+
+Parameter reads report the normalised metric `value`, a `unit` label, and the `displayValue`
+exactly as Revit shows it in the properties palette. Parameter writes convert metric → internal
+using the parameter's own data type, so `{"name": "Sill Height", "value": 900}` means 900 mm.
+
+Responses are kept AI-friendly: lists page at 50 items by default (500 hard maximum) and report
+`nextOffset`; solids, meshes and faces are **never** serialised — geometry is reduced to bounding
+boxes and location curves.
+
+---
+
+## Testing without Revit
+
+The mock bridge speaks the real IPC protocol and publishes a real discovery endpoint, so a client
+configuration can be proven before Revit is involved:
+
+```powershell
+.\artifacts\Release\MockBridge\AB.RevitMcp.MockBridge.exe
+```
+
+Then point your MCP client at the server as usual and call `revit_get_model_info` or
+`revit_list_levels`.
+
+---
+
+## Logging
+
+Structured newline-delimited JSON, one object per line, rolling daily:
+
+```
+%LOCALAPPDATA%\ABRevitMcp\logs\bridge-YYYYMMDD.ndjson
+```
+
+Every request records `requestId`, `tool`, `toolCategory`, `ok`, `durationMs`, `resultBytes`,
+`client`, and on failure `errorCode` and `errorMessage`. The **Status** ribbon button shows live
+counters and the last dozen entries without touching the disk.
+
+---
+
+## Further reading
+
+- [docs/CLIENTS.md](docs/CLIENTS.md) — connecting Claude, Cursor, VS Code, DeepSeek, local models
+- [docs/TOOLS.md](docs/TOOLS.md) — generated tool reference
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — threading, transactions, wire protocol
+- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — when it does not connect
+
+---
+
+## Author
+
+**Abdullah Lotfy**  
+[linkedin.com/in/abdullahalqublawi](https://www.linkedin.com/in/abdullahalqublawi/)
+
+The Revit ribbon carries an **About** button and a LinkedIn link on the *AB MCP AI* tab, and
+the add-in manifest records the same details as its vendor.

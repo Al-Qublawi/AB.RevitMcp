@@ -1,0 +1,15 @@
+AB Revit MCP Bridge
+Copyright (c) 2026 Abdullah Lotfy
+
+Licensed under the MIT License. See LICENSE.
+
+---
+
+Autodesk and Revit are trademarks of Autodesk, Inc. This project is an
+independent work and is not affiliated with, endorsed by, or sponsored by
+Autodesk, Inc.
+
+This project builds against the Revit API assemblies (RevitAPI.dll,
+RevitAPIUI.dll) that ship with an installed copy of Autodesk Revit. Those
+assemblies are Autodesk's and are neither included in this repository nor
+redistributed by it; you need a licensed Revit installation to build.

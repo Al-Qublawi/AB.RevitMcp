@@ -172,7 +172,8 @@ namespace AB.RevitMcp.Server
             sb.AppendLine("Useful arguments");
             sb.AppendLine("  --read-only              refuse every write and destructive tool");
             sb.AppendLine("  --revit-version 2024     pin one Revit release when several are open");
-            sb.AppendLine("  --timeout 30000          raise the per-request budget (ms)");
+            sb.AppendLine("  --timeout 60000          raise the per-request budget (ms; default 30000,");
+            sb.AppendLine("                           export already gets 300000 of its own)");
             sb.AppendLine();
             sb.AppendLine("Example - a safe read-only entry alongside the full-access one:");
             sb.AppendLine();

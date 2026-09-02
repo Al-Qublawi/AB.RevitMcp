@@ -24,11 +24,27 @@ namespace AB.RevitMcp.Contracts.Protocol
         /// <summary>Environment variable overriding the per-request timeout, in milliseconds.</summary>
         public const string TimeoutEnvVar = "AB_REVITMCP_TIMEOUT_MS";
 
-        /// <summary>Default per-request budget: Revit must answer within this or the call is cancelled.</summary>
-        public const int DefaultRequestTimeoutMs = 15000;
+        /// <summary>
+        /// Default per-request budget: Revit must answer within this or the call is cancelled.
+        /// Comfortable for interactive queries and ordinary edits, which finish in tens of
+        /// milliseconds. Genuinely long operations declare their own budget instead - see
+        /// <see cref="LongRunningTimeoutMs"/> and <c>ToolDescriptor.TimeoutMs</c>.
+        /// </summary>
+        public const int DefaultRequestTimeoutMs = 30000;
 
-        /// <summary>Hard ceiling a client may request.</summary>
-        public const int MaxRequestTimeoutMs = 120000;
+        /// <summary>
+        /// Budget for tools that drive a whole Revit export or a model-wide sweep. Exporting a
+        /// sheet set to PDF or DWG is minutes of work on a real project, and it is not something
+        /// the caller can page or shrink, so the request must be allowed to run to completion.
+        /// </summary>
+        public const int LongRunningTimeoutMs = 300000;   // 5 minutes
+
+        /// <summary>
+        /// Hard ceiling a client may request. Above <see cref="LongRunningTimeoutMs"/> so an
+        /// operator can raise the budget further with --timeout for an unusually large export
+        /// without recompiling.
+        /// </summary>
+        public const int MaxRequestTimeoutMs = 600000;    // 10 minutes
 
         /// <summary>Time allowed for the named-pipe connection handshake.</summary>
         public const int ConnectTimeoutMs = 3000;

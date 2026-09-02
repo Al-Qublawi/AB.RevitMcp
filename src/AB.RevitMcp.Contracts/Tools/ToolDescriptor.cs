@@ -29,7 +29,17 @@ namespace AB.RevitMcp.Contracts.Tools
         public ToolCategory Category { get; private set; }
         public JsonValue InputSchema { get; private set; }
 
-        public ToolDescriptor(string name, ToolCategory category, string title, string description, JsonValue inputSchema)
+        /// <summary>
+        /// How long this specific tool may run, in milliseconds; 0 means "use the server default".
+        /// Most tools answer in milliseconds and leave this at 0. A tool sets it when the work is
+        /// inherently long and the caller cannot make it smaller - an export of a whole sheet set
+        /// has no page size to reduce, so cutting it off at the interactive budget would mean it
+        /// could never succeed at all.
+        /// </summary>
+        public int TimeoutMs { get; private set; }
+
+        public ToolDescriptor(string name, ToolCategory category, string title, string description,
+                              JsonValue inputSchema, int timeoutMs = 0)
         {
             if (string.IsNullOrEmpty(name)) throw new ArgumentException("Tool name is required.", "name");
             Name = name;
@@ -37,6 +47,18 @@ namespace AB.RevitMcp.Contracts.Tools
             Title = title ?? name;
             Description = description ?? string.Empty;
             InputSchema = inputSchema ?? Sch.NoArgs();
+            TimeoutMs = timeoutMs > 0 ? timeoutMs : 0;
+        }
+
+        /// <summary>
+        /// The budget to actually send for this tool, given the server's configured default.
+        /// A declared timeout acts as a FLOOR, never a cap: raising --timeout above it still wins,
+        /// so an operator can give an unusually large export more room without a rebuild.
+        /// </summary>
+        public int EffectiveTimeoutMs(int serverDefaultMs)
+        {
+            if (TimeoutMs <= 0) return serverDefaultMs;
+            return TimeoutMs > serverDefaultMs ? TimeoutMs : serverDefaultMs;
         }
 
         public bool IsDestructive { get { return Category == ToolCategory.Destructive; } }
@@ -78,6 +100,7 @@ namespace AB.RevitMcp.Contracts.Tools
             t.Set("category", Category.ToString().ToLowerInvariant());
             t.Set("description", Description);
             t.Set("inputSchema", InputSchema.Clone());
+            if (TimeoutMs > 0) t.Set("timeoutMs", TimeoutMs);
             return t;
         }
     }

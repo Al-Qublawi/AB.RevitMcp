@@ -64,7 +64,7 @@ immediately rather than blocking forever on a bogus read.
 ```json
 { "v": 1, "id": "3f2a...", "tool": "revit_query_elements",
   "args": { "category": "Walls", "limit": 50 },
-  "timeoutMs": 15000, "client": "claude-desktop" }
+  "timeoutMs": 30000, "client": "claude-desktop" }
 ```
 
 **Response**

@@ -35,9 +35,10 @@ namespace AB.RevitMcp.Contracts.Tools
             RegisterCodeTools();
         }
 
-        private static void Add(string name, ToolCategory category, string title, string description, JsonValue schema)
+        private static void Add(string name, ToolCategory category, string title, string description,
+                                JsonValue schema, int timeoutMs = 0)
         {
-            var d = new ToolDescriptor(name, category, title, description, schema);
+            var d = new ToolDescriptor(name, category, title, description, schema, timeoutMs);
             if (_byName.ContainsKey(name)) throw new InvalidOperationException("Duplicate tool name: " + name);
             _all.Add(d);
             _byName[name] = d;

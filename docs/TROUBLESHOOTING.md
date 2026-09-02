@@ -114,7 +114,9 @@ same elevation level.
 
 ## Tools time out
 
-The default budget is 15 seconds per request.
+The default budget is 30 seconds per request. Tools that are inherently long-running declare
+their own instead - `revit_export` gets 5 minutes, because exporting a sheet set is minutes of
+Revit's own work and there is no page size to shrink.
 
 - **Revit is showing a modal dialog.** Nothing can execute until a human dismisses it. This is the
   most common cause by far.

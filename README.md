@@ -220,7 +220,7 @@ reconnects automatically if Revit restarts.
 | --- | --- |
 | `--read-only` | Advertises every tool but refuses all write and destructive calls. |
 | `--revit-version 2024` | Pin to one Revit release when several are open. |
-| `--timeout 30000` | Raise the per-request budget (default 15 s, max 120 s). |
+| `--timeout 60000` | Raise the per-request budget (default 30 s, max 10 min). Long-running tools carry their own budget already — `revit_export` gets 5 minutes — and this flag only ever raises it. |
 | `--http --port 3333` | Streamable HTTP on loopback instead of stdio. |
 | `--print-tools` | Print the full tool reference as Markdown. |
 | `--verbose` | Log protocol traffic to stderr. |
@@ -281,7 +281,9 @@ Layered, and enforced in code rather than documented in prose:
    an AI-driven session can never hang Revit behind a dialog nobody is watching.
 6. **No arbitrary code execution** — there is no "run this C#/Python" tool, by design. The attack
    surface is exactly the 46 declared schemas.
-7. **Timeouts and cancellation** — 15 s per request by default. On timeout, queued work is
+7. **Timeouts and cancellation** — 30 s per request by default, and a tool that is inherently
+   long declares its own budget instead (`revit_export`: 5 minutes), because an export has no
+   page size the caller could reduce. On timeout, queued work is
    discarded and the caller gets a structured `TIMEOUT`; work already running on the UI thread is
    allowed to finish, because forcibly aborting Revit's UI thread would corrupt the document.
 8. **Local only** — an ACL'd named pipe restricted to the current Windows user. The HTTP transport

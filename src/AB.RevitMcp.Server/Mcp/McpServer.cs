@@ -317,7 +317,10 @@ namespace AB.RevitMcp.Server.Mcp
                 Id = Guid.NewGuid().ToString("N"),
                 Tool = name,
                 Arguments = arguments,
-                TimeoutMs = _options.RequestTimeoutMs,
+                // A tool that declares its own budget (export, for one) gets it; everything else
+                // uses the server default. Declared budgets act as a floor, so --timeout can still
+                // raise them but never silently cut an export short.
+                TimeoutMs = descriptor.EffectiveTimeoutMs(_options.RequestTimeoutMs),
                 ClientName = _clientName
             };
 

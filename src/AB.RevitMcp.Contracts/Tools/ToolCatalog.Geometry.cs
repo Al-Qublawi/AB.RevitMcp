@@ -1,4 +1,5 @@
 using AB.RevitMcp.Contracts.Json;
+using AB.RevitMcp.Contracts.Protocol;
 
 namespace AB.RevitMcp.Contracts.Tools
 {
@@ -95,7 +96,12 @@ namespace AB.RevitMcp.Contracts.Tools
                     "viewNames", Sch.Arr(Sch.Str("View name."),
                         "Views to export, by name. Alternative to viewIds.", 1, 200),
                     "imageWidthPixels", Sch.Int("Image width in pixels, for format 'image'. Default 1920.",
-                        64, 16000, 1920)));
+                        64, 16000, 1920)),
+                // Export drives Revit's own exporters over a whole sheet or view set. On a real
+                // project that is minutes, not milliseconds, and unlike a list tool there is no
+                // page size the caller can reduce - so it gets its own budget instead of dying at
+                // the interactive default.
+                IpcConstants.LongRunningTimeoutMs);
         }
     }
 }

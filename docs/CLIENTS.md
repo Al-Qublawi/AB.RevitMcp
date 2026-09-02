@@ -93,7 +93,7 @@ Other arguments worth putting in `args`:
 | Argument | Why |
 | --- | --- |
 | `--revit-version 2024` | Pin one release when several Revit versions are open at once. |
-| `--timeout 30000` | Large models or slow operations (purge on a big file). |
+| `--timeout 60000` | Large models or slow operations (purge on a big file). Export already has its own 5-minute budget. |
 | `--verbose` | Log every JSON-RPC method to stderr for debugging. |
 
 ## HTTP transport

@@ -195,6 +195,9 @@ namespace AB.RevitMcp.Server
                 "  --revit-version <yyyy>  Only connect to this Revit release, e.g. 2024.",
                 "  --timeout <ms>          Per-request budget (default " + IpcConstants.DefaultRequestTimeoutMs +
                     ", maximum " + IpcConstants.MaxRequestTimeoutMs + ").",
+                "                          Long-running tools carry their own larger budget -",
+                "                          revit_export gets " + (IpcConstants.LongRunningTimeoutMs / 1000) +
+                    "s - and this flag only ever raises it.",
                 "",
                 "SAFETY",
                 "  --allow-code-execution  Expose revit_execute_code, which compiles and runs",

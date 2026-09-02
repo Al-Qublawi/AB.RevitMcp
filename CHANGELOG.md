@@ -3,6 +3,21 @@
 All notable changes to this project are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] — 2026-09-02
+
+### Changed
+- **Per-tool request budgets.** A single 15-second timeout applied to every call, which made
+  `revit_export` impossible to complete: exporting a sheet set is minutes of Revit's own work, and
+  unlike a list tool there is no page size the caller can shrink. Tools now declare their own
+  budget via `ToolDescriptor.TimeoutMs`:
+  - default for ordinary calls: **15 s → 30 s**
+  - `revit_export`: **5 minutes**
+  - ceiling for `--timeout`: **2 → 10 minutes**
+
+  A declared budget is a **floor, not a cap** — raising `--timeout` still wins, so an unusually
+  large export can be given more room without a rebuild, but no flag can silently cut an export
+  short. `bridge/describe` now reports a tool's declared budget.
+
 ## [1.1.0] — 2026-09-02
 
 The Modify tab, plus the geometry and MEP batches. **78 tools** (24 read / 48 write / 6 destructive).

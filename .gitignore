@@ -30,3 +30,6 @@ installer/AB.RevitMcp.Setup/lib/
 # ---- scratch -----------------------------------------------------------
 .testout/
 *.log
+
+# ---- promo / marketing assets (not part of the product) ----
+.promo/

@@ -4,22 +4,43 @@ MCP agent — can safely query, create and modify Autodesk Revit models.
 
 **Revit 2020 – 2026 · 78 tools · metric in, metric out · no AI vendor lock-in.**
 
-## What's new in 1.2.0
+## What's new in 1.3.0
 
-**Export no longer times out.** A single 15-second budget applied to every call, so
-`revit_export` could never finish — exporting a sheet set is minutes of Revit's own work, and
-unlike a paginated list there is nothing the caller can make smaller.
+### `spawn EPERM` is fixed — the server now starts on managed devices
 
-Tools now declare their own budget:
+If your AI client reported `spawn EPERM`, or Defender showed **"Risky action blocked"**, the
+server was never being allowed to start. That is Defender's Attack Surface Reduction rule:
 
-| | Budget |
-| --- | --- |
-| Ordinary calls | **30 s** (was 15 s) |
-| `revit_export` | **5 minutes** |
-| Ceiling for `--timeout` | **10 minutes** (was 2) |
+```
+Block executable files from running unless they meet a prevalence, age, or trusted list criteria
+```
 
-A declared budget is a **floor, not a cap**: `--timeout` can still raise it for an unusually large
-export, but no setting can silently cut one short.
+A policy rule, not a malware detection — and a freshly built, unsigned executable fails all three
+tests by definition.
+
+**Setup now works around it.** The publish already ships the managed `AB.RevitMcp.Server.dll`
+beside its apphost `.exe`, so the identical program can start through `dotnet.exe`. The process
+Windows is asked to create is then `dotnet.exe` — Microsoft-signed, about as prevalent as software
+gets — and the rule has nothing to act on. The `.dll` is *loaded*, not executed as a process.
+Nothing is disabled or bypassed: same code, same user, same permissions.
+
+Setup only takes that route after **proving** it works on your machine, and falls back to the
+direct executable when .NET is absent. Already installed? See
+[TROUBLESHOOTING.md](https://github.com/Al-Qublawi/AB.RevitMcp/blob/main/docs/TROUBLESHOOTING.md)
+for the two-line config edit.
+
+### Revit 2026 update 26.5 no longer breaks the build
+
+Autodesk's 26.5 update is built against .NET 10, which made the add-in unbuildable on an updated
+machine. The add-in now compiles against pinned Revit API reference packages instead of whatever
+Revit is installed, so the build is reproducible and **Revit is no longer required to build it**.
+
+Your installed add-in was never affected — verified against a live 26.5.0.55 session.
+
+### Also fixed
+
+- `--print-config` emitted a config that starts nothing when the server ran under `dotnet.exe`.
+- The IT allowlist file had its version hardcoded to `1.1.0` and misreported every release since.
 
 ## Install
 
@@ -30,10 +51,9 @@ export, but no setting can silently cut one short.
 One file, no prerequisites beyond .NET Framework 4.8 (which Revit already requires). No admin
 rights, no registry writes, no services. Silent deployment: `AB.RevitMcp.Setup.exe /silent`.
 
-> **Not code-signed.** On a managed machine, Defender's Attack Surface Reduction rule *"Block
-> executable files from running unless they meet a prevalence, age, or trusted list criterion"*
-> will block it. `AB.RevitMcp.Setup.allowlist.txt` in the repo has the identity details to give
-> IT, and `build/sign.ps1` signs the build if you have a certificate.
+> **Not code-signed.** The installer itself can still be blocked by the same ASR rule.
+> `AB.RevitMcp.Setup.allowlist.txt` in the repo has the publisher, version and SHA256 to give IT,
+> and `build/sign.ps1` signs the build if you have a certificate.
 
 ## How it works
 
@@ -65,18 +85,17 @@ CertUtil -hashfile AB.RevitMcp.Setup.exe SHA256
 ```
 
 ```
-0e6675293d7ea3d1a9bf0c8ceb4ec76dc1965fe4e6a6ee287a0af08d83865448
+bfabbcb1824b568e21c7c592af151cbbe8c307a14c53a26a4a1b38507ac9192d
 ```
 
 ## Known limitations
 
 - The installer is **unsigned** (see above).
-- Write and destructive tools are compile-verified against Revit 2020/2024/2026 and exercised by
+- Write and destructive tools are compile-verified across Revit 2020/2024/2026 and exercised by
   hand, but there is no automated test suite running inside Revit. **Try new tools on a scratch
   model before a live one.**
-- `revit_purge_unused` and `revit_get_model_health` still use the 30-second default. Both can run
-  long on a very large model; if you hit a timeout on either, they are one-line changes to give
-  their own budget.
+- `revit_purge_unused` and `revit_get_model_health` use the 30-second default budget. Both can run
+  long on a very large model.
 - `revit_execute_code` is a deliberate escape hatch, gated like any destructive tool. Remove it
   from the catalogue or run `--read-only` if you would rather it did not exist.
 

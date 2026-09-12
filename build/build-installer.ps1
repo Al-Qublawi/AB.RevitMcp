@@ -212,7 +212,7 @@ $hashFile = Join-Path $distDir 'AB.RevitMcp.Setup.allowlist.txt'
 @(
     'AB Revit MCP Bridge - installer identity'
     'Publisher      : Abdullah Lotfy'
-    ('Version        : {0}' -f (Get-Item $setupExe).VersionInfo.FileVersion)
+    ('Version        : {0}' -f (Get-Item $finalExe).VersionInfo.FileVersion)
     ('File           : {0}' -f (Split-Path -Leaf $finalExe))
     ('Size           : {0} bytes' -f (Get-Item $finalExe).Length)
     ('SHA256         : {0}' -f $hash)

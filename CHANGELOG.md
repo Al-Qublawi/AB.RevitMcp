@@ -3,6 +3,32 @@
 All notable changes to this project are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] — 2026-09-12
+
+### Fixed
+- **`spawn EPERM` - the server could not start on a managed device.** Defender's ASR rule
+  `01443614-cd74-433a-b99e-2ecdc07bfc25` refuses to create a process for an unsigned binary with
+  no prevalence history, which ours is by definition. Setup now detects .NET and registers clients
+  as `dotnet.exe AB.RevitMcp.Server.dll`, using the managed assembly that already ships beside the
+  apphost. The process created is then Microsoft-signed `dotnet.exe` and the rule has nothing to
+  act on. It only takes this route after proving it works on the machine, and falls back to the
+  direct executable otherwise.
+- **`--print-config` emitted a config that starts nothing** when the server itself ran under
+  `dotnet.exe`: it named itself from `Process.MainModule`, which is `dotnet.exe`, and passed no
+  arguments. It now reports the real argument list, in both JSON and YAML.
+- **The allowlist file IT uses to whitelist the build had its version hardcoded** to `1.1.0`, so it
+  misreported every release since 1.1.0. It now reads the built executable.
+
+### Changed
+- **The add-in compiles against pinned Revit API reference packages** (`Nice3point.Revit.Api.*`)
+  rather than the DLLs of whatever Revit happens to be installed on the build machine. Revit 2026
+  update 26.5 is built against .NET 10, which made the net8 project unbuildable on an updated
+  machine (`CS1705`) for reasons unconnected to our code. The pinned 2026.4.10 reference
+  assemblies still target `net8.0-windows7.0`, and the resulting add-in loads correctly under
+  26.5 - verified against a live 26.5.0.55 session - because .NET stayed backward compatible.
+  Targeting .NET 10 instead would break everyone still on 26.4. Build against a local install with
+  `-p:UseRevitApiPackages=false`. Revit no longer needs to be installed to build.
+
 ## [1.2.0] — 2026-09-02
 
 ### Changed

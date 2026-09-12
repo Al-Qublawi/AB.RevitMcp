@@ -35,6 +35,45 @@
     <OutputPath>$(MSBuildThisFileDirectory)..\..\artifacts\$(Configuration)\Revit$(RevitVersion)\</OutputPath>
 
     <!--
+      Where the Revit API metadata comes from. Packages by default; set this to false (or pass
+      -p:UseRevitApiPackages=false) to compile against the DLLs in a local Revit install instead.
+
+      Packages are the default because compiling against an INSTALLED Revit ties the build to
+      whatever update Autodesk last pushed to the build machine. Revit 2026 update 26.5 is exactly
+      that trap: it is built against .NET 10, so a net8 project can no longer reference it at all -
+
+        error CS1705: Assembly 'RevitAPI' ... uses 'System.Runtime, Version=10.0.0.0' which has a
+        higher version than referenced assembly 'System.Runtime, Version=8.0.0.0'
+
+      and the add-in became unbuildable on an up-to-date machine, for no reason connected to our
+      code. The pinned 2026.4.10 reference assemblies still target net8.0-windows7.0, and the
+      resulting binary loads happily under 26.5 - verified against a live 26.5.0.55 session -
+      because .NET stayed backward compatible. Targeting net10 instead would only break everyone
+      still on 26.4.
+    -->
+    <UseRevitApiPackages Condition="'$(UseRevitApiPackages)' == ''">true</UseRevitApiPackages>
+
+    <!--
+      The runtime this Revit release actually uses. Restore walks EVERY entry in TargetFrameworks,
+      not just the one being built, so without this the net48 pass would try to resolve the net8
+      2026 package and fail restore before a single file compiled:
+        NU1202: Package ... 2026.4.10 is not compatible with net48
+      Gating the PackageReference on this keeps each release's package on the one framework that
+      can consume it.
+    -->
+    <RevitTargetFramework Condition="'$(RevitVersion)' &gt;= '2025'">net8.0-windows</RevitTargetFramework>
+    <RevitTargetFramework Condition="'$(RevitVersion)' &lt; '2025'">net48</RevitTargetFramework>
+
+    <!-- Revit release -> pinned reference-assembly package version. -->
+    <RevitApiPackageVersion Condition="'$(RevitVersion)' == '2020'">2020.2.60</RevitApiPackageVersion>
+    <RevitApiPackageVersion Condition="'$(RevitVersion)' == '2021'">2021.1.50</RevitApiPackageVersion>
+    <RevitApiPackageVersion Condition="'$(RevitVersion)' == '2022'">2022.1.80</RevitApiPackageVersion>
+    <RevitApiPackageVersion Condition="'$(RevitVersion)' == '2023'">2023.1.90</RevitApiPackageVersion>
+    <RevitApiPackageVersion Condition="'$(RevitVersion)' == '2024'">2024.3.60</RevitApiPackageVersion>
+    <RevitApiPackageVersion Condition="'$(RevitVersion)' == '2025'">2025.4.60</RevitApiPackageVersion>
+    <RevitApiPackageVersion Condition="'$(RevitVersion)' == '2026'">2026.4.10</RevitApiPackageVersion>
+
+    <!--
       AppendTargetFrameworkToOutputPath=false above applies to the INTERMEDIATE path too, so both
       target frameworks would otherwise generate into the same obj\$(Configuration) folder and
       clobber each other's AssemblyInfo.cs. That only breaks when the two TFMs build together
@@ -69,10 +108,20 @@
   </ItemGroup>
 
   <!--
-    Revit assemblies are referenced straight out of the install folder and NEVER copied to the
-    output: Revit loads its own copies, and shipping a second one is a guaranteed type-identity bug.
+    Revit metadata, from pinned reference-assembly packages. These ship only ref/ assemblies, so
+    nothing lands in the output: Revit loads its own copies at runtime, and shipping a second one
+    is a guaranteed type-identity bug. PrivateAssets/ExcludeAssets make that explicit and stop the
+    reference flowing to anything that references this project.
   -->
-  <ItemGroup>
+  <ItemGroup Condition="'$(UseRevitApiPackages)' == 'true' and '$(TargetFramework)' == '$(RevitTargetFramework)'">
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPI" Version="$(RevitApiPackageVersion)"
+                      PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="$(RevitApiPackageVersion)"
+                      PrivateAssets="all" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <!-- Opt-out path: compile against a local Revit install. -->
+  <ItemGroup Condition="'$(UseRevitApiPackages)' != 'true'">
     <Reference Include="RevitAPI">
       <HintPath>$(RevitApiDir)\RevitAPI.dll</HintPath>
       <Private>false</Private>
@@ -118,8 +167,12 @@
   </ItemGroup>
 
   <Target Name="ValidateRevitApi" BeforeTargets="ResolveAssemblyReferences">
-    <Error Condition="!Exists('$(RevitApiDir)\RevitAPI.dll')"
-           Text="RevitAPI.dll was not found at '$(RevitApiDir)'. Install Revit $(RevitVersion), or pass -p:RevitApiDir=&lt;folder containing RevitAPI.dll&gt;." />
+    <!-- Using packages: Revit need not be installed at all, but the release must be one we pin. -->
+    <Error Condition="'$(UseRevitApiPackages)' == 'true' and '$(RevitApiPackageVersion)' == ''"
+           Text="No Revit API package version is pinned for Revit $(RevitVersion). Add one to RevitApiPackageVersion in this file, or build against a local install with -p:UseRevitApiPackages=false." />
+
+    <Error Condition="'$(UseRevitApiPackages)' != 'true' and !Exists('$(RevitApiDir)\RevitAPI.dll')"
+           Text="RevitAPI.dll was not found at '$(RevitApiDir)'. Install Revit $(RevitVersion), pass -p:RevitApiDir=&lt;folder containing RevitAPI.dll&gt;, or drop -p:UseRevitApiPackages=false to build from the pinned reference packages." />
     <Error Condition="'$(TargetFramework)' == 'net48' and '$(RevitVersion)' &gt;= '2025'"
            Text="Revit $(RevitVersion) runs on .NET 8. Build it with -f net8.0-windows." />
     <Error Condition="'$(TargetFramework)' == 'net8.0-windows' and '$(RevitVersion)' &lt; '2025'"

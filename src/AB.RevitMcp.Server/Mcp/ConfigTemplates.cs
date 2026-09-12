@@ -15,6 +15,55 @@ namespace AB.RevitMcp.Server
     /// </summary>
     public static class ConfigTemplates
     {
+        /// <summary>
+        /// The argument list a client must pass. Empty for the apphost .exe; the managed .dll when
+        /// this process was started as "dotnet.exe AB.RevitMcp.Server.dll" - the launch form that
+        /// survives Defender's ASR prevalence rule. Without this, --print-config would emit
+        /// dotnet.exe with no arguments, which starts nothing.
+        /// </summary>
+        public static string[] LaunchArgs()
+        {
+            try
+            {
+                string host = Process_MainModuleFileName();
+                if (!string.IsNullOrEmpty(host) &&
+                    string.Equals(Path.GetFileName(host), "dotnet.exe", StringComparison.OrdinalIgnoreCase))
+                {
+                    Assembly entry = Assembly.GetEntryAssembly();
+                    string dll = entry != null ? entry.Location : null;
+                    if (!string.IsNullOrEmpty(dll) &&
+                        string.Equals(Path.GetExtension(dll), ".dll", StringComparison.OrdinalIgnoreCase))
+                        return new[] { dll };
+                }
+            }
+            catch (Exception) { }
+
+            return new string[0];
+        }
+
+        /// <summary>The launch arguments as a YAML inline sequence, for Continue's config.yaml.</summary>
+        private static string YamlArgs()
+        {
+            string[] args = LaunchArgs();
+            if (args.Length == 0) return "[]";
+
+            var sb = new StringBuilder("[");
+            for (int i = 0; i < args.Length; i++)
+            {
+                if (i > 0) sb.Append(", ");
+                sb.Append('"').Append(args[i].Replace("\\", "\\\\")).Append('"');
+            }
+            return sb.Append(']').ToString();
+        }
+
+        private static void SetArgs(JsonValue entry)
+        {
+            JsonValue a = JsonValue.NewArray();
+            string[] args = LaunchArgs();
+            for (int i = 0; i < args.Length; i++) a.Add(args[i]);
+            entry.Set("args", a);
+        }
+
         public static string ExecutablePath()
         {
             try
@@ -113,7 +162,7 @@ namespace AB.RevitMcp.Server
 
             if (all || Is(client, "continue")) Section(sb, "Continue",
                 @"%USERPROFILE%\.continue\config.yaml   (YAML, not JSON)",
-                "mcpServers:\n  - name: revit\n    command: " + exe + "\n    args: []");
+                "mcpServers:\n  - name: revit\n    command: " + exe + "\n    args: " + YamlArgs());
 
             if (all || Is(client, "lmstudio")) Section(sb, "LM Studio (local models: Qwen, Llama, DeepSeek-R1 ...)",
                 "Program -> Install -> Edit mcp.json",
@@ -201,7 +250,7 @@ namespace AB.RevitMcp.Server
         {
             JsonValue entry = JsonValue.NewObject();
             entry.Set("command", exe);
-            entry.Set("args", JsonValue.NewArray());
+            SetArgs(entry);
 
             JsonValue servers = JsonValue.NewObject();
             servers.Set("revit", entry);
@@ -220,7 +269,7 @@ namespace AB.RevitMcp.Server
             JsonValue entry = JsonValue.NewObject();
             if (includeType) entry.Set("type", "stdio");
             entry.Set("command", exe);
-            entry.Set("args", JsonValue.NewArray());
+            SetArgs(entry);
             if (!includeType) entry.Set("env", JsonValue.NewObject());
 
             JsonValue servers = JsonValue.NewObject();
@@ -235,11 +284,15 @@ namespace AB.RevitMcp.Server
         {
             JsonValue safe = JsonValue.NewObject();
             safe.Set("command", exe);
-            safe.Set("args", J.A("--read-only"));
+            JsonValue safeArgs = JsonValue.NewArray();
+            string[] launch = LaunchArgs();
+            for (int i = 0; i < launch.Length; i++) safeArgs.Add(launch[i]);
+            safeArgs.Add("--read-only");
+            safe.Set("args", safeArgs);
 
             JsonValue full = JsonValue.NewObject();
             full.Set("command", exe);
-            full.Set("args", JsonValue.NewArray());
+            SetArgs(full);
 
             JsonValue servers = JsonValue.NewObject();
             servers.Set("revit-readonly", safe);

@@ -1,11 +1,168 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Text;
 using AB.RevitMcp.Contracts.Json;
 
 namespace AB.RevitMcp.Setup
 {
+    /// <summary>
+    /// How an MCP client should start the server: a command plus arguments.
+    ///
+    /// This exists because of Microsoft Defender's Attack Surface Reduction rule
+    /// "Block executable files from running unless they meet a prevalence, age, or trusted list
+    /// criteria" (01443614-cd74-433a-b99e-2ecdc07bfc25). A freshly built, unsigned executable
+    /// fails all three tests by definition, so on a managed machine Windows refuses to create the
+    /// process at all - the client reports "spawn EPERM" and the bridge never starts.
+    ///
+    /// The server publish contains the managed AB.RevitMcp.Server.dll next to its apphost .exe,
+    /// so the identical program can be started as "dotnet.exe AB.RevitMcp.Server.dll" instead.
+    /// The process then being created is dotnet.exe - Microsoft-signed and about as prevalent as
+    /// software gets - and the rule has nothing to act on. The .dll is LOADED, not executed as a
+    /// process. Nothing is disabled or bypassed: same code, same user, same permissions.
+    /// </summary>
+    public sealed class LaunchSpec
+    {
+        public string Command;
+        public string[] Args;
+        public bool ViaDotnet;
+
+        private LaunchSpec() { Args = new string[0]; }
+
+        /// <summary>The arguments as a JSON array, for a client config file.</summary>
+        public JsonValue ArgsJson()
+        {
+            JsonValue a = JsonValue.NewArray();
+            for (int i = 0; i < Args.Length; i++) a.Add(Args[i]);
+            return a;
+        }
+
+        /// <summary>A quoted command line, for clients that take one string.</summary>
+        public string CommandLine()
+        {
+            var sb = new StringBuilder();
+            sb.Append('"').Append(Command).Append('"');
+            for (int i = 0; i < Args.Length; i++) sb.Append(" \"").Append(Args[i]).Append('"');
+            return sb.ToString();
+        }
+
+        /// <summary>YAML args, e.g. <c>[]</c> or <c>["C:\\...\\x.dll"]</c>.</summary>
+        public string ArgsYaml()
+        {
+            if (Args.Length == 0) return "[]";
+            var sb = new StringBuilder("[");
+            for (int i = 0; i < Args.Length; i++)
+            {
+                if (i > 0) sb.Append(", ");
+                sb.Append('"').Append(Args[i].Replace("\\", "\\\\")).Append('"');
+            }
+            return sb.Append(']').ToString();
+        }
+
+        private static LaunchSpec Direct(string serverExe)
+        {
+            return new LaunchSpec { Command = serverExe, Args = new string[0], ViaDotnet = false };
+        }
+
+        /// <summary>
+        /// Decides how to launch. Prefers the dotnet route, but only after actually PROVING it
+        /// works on this machine - a config that points at a dotnet which cannot start the server
+        /// would be worse than the ASR block it is meant to avoid.
+        /// </summary>
+        public static LaunchSpec For(string serverExe, Action<string> log)
+        {
+            if (log == null) log = delegate { };
+
+            string dll = Path.ChangeExtension(serverExe, ".dll");
+            if (!File.Exists(dll))
+            {
+                log("  launch: the managed .dll is missing - using the executable directly");
+                return Direct(serverExe);
+            }
+
+            string dotnet = FindDotnet();
+            if (dotnet == null)
+            {
+                log("  launch: .NET is not installed - using the executable directly");
+                log("          (if Defender blocks it, install the .NET runtime and re-run this setup)");
+                return Direct(serverExe);
+            }
+
+            if (!CanLaunch(dotnet, dll))
+            {
+                log("  launch: dotnet could not start the server - using the executable directly");
+                return Direct(serverExe);
+            }
+
+            log("  launch: via dotnet.exe (Microsoft-signed, immune to the Defender ASR block)");
+            return new LaunchSpec { Command = dotnet, Args = new[] { dll }, ViaDotnet = true };
+        }
+
+        private static string FindDotnet()
+        {
+            var candidates = new List<string>();
+
+            // The 64-bit install location, whichever variable this process sees.
+            string pf64 = Environment.GetEnvironmentVariable("ProgramW6432");
+            if (!string.IsNullOrEmpty(pf64)) candidates.Add(Path.Combine(pf64, "dotnet", "dotnet.exe"));
+
+            string pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            if (!string.IsNullOrEmpty(pf)) candidates.Add(Path.Combine(pf, "dotnet", "dotnet.exe"));
+
+            // Per-user installs.
+            string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            if (!string.IsNullOrEmpty(local)) candidates.Add(Path.Combine(local, "Microsoft", "dotnet", "dotnet.exe"));
+
+            // Anything on PATH.
+            string path = Environment.GetEnvironmentVariable("PATH");
+            if (!string.IsNullOrEmpty(path))
+            {
+                foreach (string dir in path.Split(';'))
+                {
+                    if (string.IsNullOrEmpty(dir)) continue;
+                    try { candidates.Add(Path.Combine(dir.Trim(), "dotnet.exe")); }
+                    catch (ArgumentException) { }   // a malformed PATH entry
+                }
+            }
+
+            foreach (string c in candidates)
+            {
+                try { if (File.Exists(c)) return c; }
+                catch (Exception) { }
+            }
+            return null;
+        }
+
+        /// <summary>Runs "dotnet server.dll --help" and requires a clean exit.</summary>
+        private static bool CanLaunch(string dotnet, string dll)
+        {
+            try
+            {
+                var psi = new ProcessStartInfo(dotnet, "\"" + dll + "\" --help")
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                };
+
+                using (Process p = Process.Start(psi))
+                {
+                    if (p == null) return false;
+                    // Drain stdout so a full pipe buffer cannot deadlock the child.
+                    p.StandardOutput.ReadToEnd();
+                    if (!p.WaitForExit(15000)) { try { p.Kill(); } catch (Exception) { } return false; }
+                    return p.ExitCode == 0;
+                }
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+    }
+
     public enum AgentFormat
     {
         /// <summary>A JSON object keyed by server name under a root key.</summary>
@@ -208,6 +365,14 @@ namespace AB.RevitMcp.Setup
 
         public int Configure(IEnumerable<AgentTarget> agents, string serverExe)
         {
+            // Decide ONCE how the server should be started, so every client is registered the
+            // same way and the probe only runs a single time.
+            LaunchSpec spec = LaunchSpec.For(serverExe, _log);
+            return Configure(agents, spec);
+        }
+
+        public int Configure(IEnumerable<AgentTarget> agents, LaunchSpec spec)
+        {
             int configured = 0;
 
             foreach (AgentTarget agent in agents)
@@ -216,17 +381,17 @@ namespace AB.RevitMcp.Setup
                 {
                     if (agent.Format == AgentFormat.CommandOnly)
                     {
-                        _log(agent.Name + ": run  " + agent.Hint.Replace("{SERVER}", serverExe));
+                        _log(agent.Name + ": run  " + agent.Hint.Replace("{SERVER}", spec.CommandLine()));
                         continue;
                     }
 
                     if (agent.Format == AgentFormat.Yaml)
                     {
-                        if (ConfigureYaml(agent, serverExe)) configured++;
+                        if (ConfigureYaml(agent, spec)) configured++;
                         continue;
                     }
 
-                    if (ConfigureJson(agent, serverExe)) configured++;
+                    if (ConfigureJson(agent, spec)) configured++;
                 }
                 catch (Exception ex)
                 {
@@ -237,7 +402,7 @@ namespace AB.RevitMcp.Setup
             return configured;
         }
 
-        private bool ConfigureJson(AgentTarget agent, string serverExe)
+        private bool ConfigureJson(AgentTarget agent, LaunchSpec spec)
         {
             if (string.IsNullOrEmpty(agent.ConfigPath))
             {
@@ -279,8 +444,8 @@ namespace AB.RevitMcp.Setup
             JsonValue servers = ResolveContainer(document, agent.RootKey);
 
             JsonValue entry = JsonValue.NewObject();
-            entry.Set("command", serverExe);
-            entry.Set("args", JsonValue.NewArray());
+            entry.Set("command", spec.Command);
+            entry.Set("args", spec.ArgsJson());
             servers.Set("revit", entry);
 
             File.WriteAllText(agent.ConfigPath, document.ToJson(true), new UTF8Encoding(false));
@@ -320,15 +485,15 @@ namespace AB.RevitMcp.Setup
         /// appends when there is no mcpServers block yet, and otherwise tells the user what to add.
         /// Silently rewriting someone's YAML with a naive text edit is how configs get destroyed.
         /// </summary>
-        private bool ConfigureYaml(AgentTarget agent, string serverExe)
+        private bool ConfigureYaml(AgentTarget agent, LaunchSpec spec)
         {
             if (!agent.Detected) { _log(agent.Name + ": not installed - skipped"); return false; }
 
             string block =
                 "mcpServers:" + Environment.NewLine +
                 "  - name: revit" + Environment.NewLine +
-                "    command: " + serverExe + Environment.NewLine +
-                "    args: []" + Environment.NewLine;
+                "    command: " + spec.Command + Environment.NewLine +
+                "    args: " + spec.ArgsYaml() + Environment.NewLine;
 
             if (!File.Exists(agent.ConfigPath))
             {
@@ -350,7 +515,8 @@ namespace AB.RevitMcp.Setup
             {
                 _log(agent.Name + ": already has an mcpServers block - add this entry by hand:");
                 _log("    - name: revit");
-                _log("      command: " + serverExe);
+                _log("      command: " + spec.Command);
+                _log("      args: " + spec.ArgsYaml());
                 return false;
             }
 

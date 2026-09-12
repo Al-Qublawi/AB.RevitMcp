@@ -19,7 +19,7 @@
     <Authors>Abdullah Lotfy</Authors>
     <Copyright>Copyright (c) Abdullah Lotfy</Copyright>
     <Description>Installs the AB Revit MCP Bridge add-in and MCP server for Autodesk Revit 2020-2026.</Description>
-    <Version>1.2.0</Version>
+    <Version>1.3.0</Version>
     <DebugType>none</DebugType>
     <ApplicationIcon>Resources\logo.ico</ApplicationIcon>
     <OutputPath>$(MSBuildThisFileDirectory)..\..\artifacts\$(Configuration)\Setup\</OutputPath>

@@ -143,7 +143,7 @@ version and SHA256 needed to allowlist it. The durable fix is code signing - see
 The server found no live endpoint. In order:
 
 - Is Revit open with a **project** (not a family) loaded?
-- Did you press **Start Bridge** on the AB MCP AI tab? The icon must be amber or green, not grey.
+- Did you press **Start Bridge** on the AB Adv Tools tab? The icon must be amber or green, not grey.
 - Check the discovery folder: `%LOCALAPPDATA%\ABRevitMcp\endpoints\` should contain a
   `revit-<pid>.json` file.
 - If a stale file is present for a Revit that crashed, the server deletes it automatically on the

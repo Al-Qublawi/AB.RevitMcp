@@ -152,12 +152,6 @@
     DLLs and removes a whole class of "works on my machine" deployment bug.
   -->
   <ItemGroup>
-    <EmbeddedResource Include="Resources\linkedin_16.ico">
-      <LogicalName>AB.RevitMcp.Addin.Resources.linkedin_16.ico</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\linkedin_32.ico">
-      <LogicalName>AB.RevitMcp.Addin.Resources.linkedin_32.ico</LogicalName>
-    </EmbeddedResource>
     <EmbeddedResource Include="Resources\logo_16.png">
       <LogicalName>AB.RevitMcp.Addin.Resources.logo_16.png</LogicalName>
     </EmbeddedResource>
@@ -165,6 +159,12 @@
       <LogicalName>AB.RevitMcp.Addin.Resources.logo_32.png</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
+
+  <!--
+    AB Adv Tools suite: the shared ribbon tab, About / Check for Updates / LinkedIn panel and
+    GitHub release notifications. The kit is compiled into this DLL; see shared\ABAdvTools.
+  -->
+  <Import Project="..\..\shared\ABAdvTools\build\ABAdvTools.Revit.targets" />
 
   <Target Name="ValidateRevitApi" BeforeTargets="ResolveAssemblyReferences">
     <!-- Using packages: Revit need not be installed at all, but the release must be one we pin. -->

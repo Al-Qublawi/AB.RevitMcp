@@ -352,7 +352,7 @@ Write-Host ("  Runtime        : {0}" -f $(if ($SelfContained) { 'bundled (no .NE
 Write-Host ''
 Write-Host '  Next steps' -ForegroundColor Cyan
 Write-Host '   1. Start Revit and open a project.'
-Write-Host '   2. Ribbon tab "AB MCP AI" -> panel "Bridge" -> press "Start Bridge".'
+Write-Host '   2. Ribbon tab "AB Adv Tools" -> panel "MCP Bridge" -> press "Start Bridge".'
 if (-not $ConfigureClients) {
     Write-Host '   3. Add this to your MCP client configuration:'
     Write-Host ''

@@ -1,0 +1,40 @@
+<Project>
+
+  <!--
+    AB Adv Tools kit for a Revit add-in project. One line in the .csproj:
+
+        <Import Project="..\..\shared\ABAdvTools\build\ABAdvTools.Revit.targets" />
+
+    Compiles the kit INTO the add-in (no shared DLL to version-conflict), embeds the shared
+    panel icons, and switches on the UI frameworks the kit's dialogs use. Works for both
+    net48 (Revit 2020-2024) and net8.0-windows (Revit 2025+).
+  -->
+
+  <PropertyGroup>
+    <ABAdvToolsKitRoot>$(MSBuildThisFileDirectory)..\</ABAdvToolsKitRoot>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <DefineConstants>$(DefineConstants);ABADVTOOLS_REVIT</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(ABAdvToolsKitRoot)src\Common\**\*.cs" LinkBase="ABAdvTools\Common" />
+    <Compile Include="$(ABAdvToolsKitRoot)src\Revit\**\*.cs" LinkBase="ABAdvTools\Revit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="$(ABAdvToolsKitRoot)assets\abadv_64.png" LogicalName="ABAdvTools.Assets.abadv_64.png" Link="ABAdvTools\Assets\abadv_64.png" />
+    <EmbeddedResource Include="$(ABAdvToolsKitRoot)assets\abadv_about_16.png" LogicalName="ABAdvTools.Assets.abadv_about_16.png" Link="ABAdvTools\Assets\abadv_about_16.png" />
+    <EmbeddedResource Include="$(ABAdvToolsKitRoot)assets\abadv_about_32.png" LogicalName="ABAdvTools.Assets.abadv_about_32.png" Link="ABAdvTools\Assets\abadv_about_32.png" />
+    <EmbeddedResource Include="$(ABAdvToolsKitRoot)assets\abadv_update_16.png" LogicalName="ABAdvTools.Assets.abadv_update_16.png" Link="ABAdvTools\Assets\abadv_update_16.png" />
+    <EmbeddedResource Include="$(ABAdvToolsKitRoot)assets\abadv_update_32.png" LogicalName="ABAdvTools.Assets.abadv_update_32.png" Link="ABAdvTools\Assets\abadv_update_32.png" />
+    <EmbeddedResource Include="$(ABAdvToolsKitRoot)assets\abadv_linkedin_16.png" LogicalName="ABAdvTools.Assets.abadv_linkedin_16.png" Link="ABAdvTools\Assets\abadv_linkedin_16.png" />
+    <EmbeddedResource Include="$(ABAdvToolsKitRoot)assets\abadv_linkedin_32.png" LogicalName="ABAdvTools.Assets.abadv_linkedin_32.png" Link="ABAdvTools\Assets\abadv_linkedin_32.png" />
+  </ItemGroup>
+
+  <!-- The update check uses HttpClient; .NET Framework needs it referenced explicitly. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <Reference Include="System.Net.Http" />
+  </ItemGroup>
+
+</Project>

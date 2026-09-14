@@ -18,12 +18,19 @@
 [CmdletBinding()]
 param(
     [string] $RepoName = 'AB.RevitMcp',
-    [string] $Tag      = 'v1.1.0',
+
+    # Defaults to v<Version> from Directory.Build.props - a hard-coded default went stale once.
+    [string] $Tag,
     [string] $Asset    = 'dist\AB.RevitMcp.Setup.exe',
 
     # Publish private instead of public. Default is public, as intended for this project.
     [switch] $Private
 )
+
+if (-not $Tag) {
+    $props = Join-Path (Split-Path -Parent $PSScriptRoot) 'Directory.Build.props'
+    $Tag = 'v' + (([xml](Get-Content $props)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1)
+}
 
 # ---------------------------------------------------------------------------
 # NOT 'Stop'. Windows PowerShell 5.1 wraps a native executable's stderr in a

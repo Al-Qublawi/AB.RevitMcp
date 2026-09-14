@@ -59,7 +59,7 @@ namespace AB.RevitMcp.Server.Doctor
                 Console.WriteLine(_liveBridges > 0
                     ? "  All checks passed, and " + _liveBridges + " Revit session(s) are live and answering. " +
                       "Point your AI client at the server and go."
-                    : "  All checks passed. Start Revit, open the 'AB MCP AI' tab and press Start Bridge.");
+                    : "  All checks passed. Start Revit, open the 'AB Adv Tools' tab and press Start Bridge.");
             else
                 Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
                     "  {0} problem(s), {1} warning(s).", _failures, _warnings));
@@ -332,7 +332,7 @@ namespace AB.RevitMcp.Server.Doctor
                             }
                             else
                                 Fail("    the bridge replied but not with a successful pong",
-                                     "Stop and start the bridge from the AB MCP AI ribbon tab.");
+                                     "Stop and start the bridge from the AB Adv Tools ribbon tab.");
                         }
                     }
                     catch (Exception ex)

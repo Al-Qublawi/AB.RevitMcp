@@ -142,5 +142,5 @@ clobbering it — run `claude mcp add revit "<path>"` instead.
 ```
 
 Then, in the client, ask it to call `revit_get_model_info`. If the bridge is not running you get a
-clear message telling you to press **Start Bridge** on the AB MCP AI ribbon tab — Revit does not
+clear message telling you to press **Start Bridge** on the AB Adv Tools ribbon tab — Revit does not
 need to be open when the client starts.

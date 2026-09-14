@@ -4,18 +4,25 @@ using System.Reflection;
 using System.Windows.Threading;
 using AB.RevitMcp.Addin.Bridge;
 using AB.RevitMcp.Contracts.Tools;
+using ABAdvTools.Revit;
 using Autodesk.Revit.UI;
 
 namespace AB.RevitMcp.Addin.Ui
 {
     /// <summary>
-    /// Builds and maintains the "AB MCP AI" ribbon tab. The toggle button doubles as the status
-    /// light: colour and caption always reflect what the bridge is actually doing.
+    /// Builds and maintains the MCP Bridge panel on the shared "AB Adv Tools" ribbon tab. The
+    /// toggle button doubles as the status light: colour and caption always reflect what the
+    /// bridge is actually doing. About and LinkedIn live on the suite's shared panel.
     /// </summary>
     public static class RibbonBuilder
     {
-        public const string TabName = "AB MCP AI";
-        public const string PanelName = "Bridge";
+        /// <summary>Panel names must be unique across every AB add-in on the tab.</summary>
+        public const string PanelName = "MCP Bridge";
+
+        public static string TabName
+        {
+            get { return RevitAdvTools.TabName; }
+        }
 
         private static PushButton _toggleButton;
         private static PushButton _autoStartButton;
@@ -26,10 +33,7 @@ namespace AB.RevitMcp.Addin.Ui
         {
             _uiDispatcher = Dispatcher.CurrentDispatcher;
 
-            try { application.CreateRibbonTab(TabName); }
-            catch (Exception) { /* the tab already exists - fine */ }
-
-            RibbonPanel panel = FindOrCreatePanel(application, TabName, PanelName);
+            RibbonPanel panel = RevitAdvTools.GetToolPanel(application, PanelName);
             string assemblyPath = Assembly.GetExecutingAssembly().Location;
 
             // ---- primary toggle ----
@@ -91,35 +95,10 @@ namespace AB.RevitMcp.Addin.Ui
             if (stacked != null && stacked.Count > 1) _autoStartButton = stacked[1] as PushButton;
             if (stacked != null && stacked.Count > 2) _codeExecButton = stacked[2] as PushButton;
 
-            panel.AddSeparator();
-
-            // ---- author ----
-            var aboutData = new PushButtonData(
-                "ABMcpAbout", "About", assemblyPath, typeof(Commands.ShowAboutCommand).FullName);
-            aboutData.ToolTip = Branding.ProductName + " " + Branding.Version + " by " + Branding.Author;
-            aboutData.Image = Branding.LogoSmall ?? IconFactory.Badge(16, IconFactory.Accent);
-            aboutData.LargeImage = Branding.LogoLarge;
-
-            var linkedInData = new PushButtonData(
-                "ABMcpLinkedIn", Branding.Author, assemblyPath, typeof(Commands.OpenLinkedInCommand).FullName);
-            linkedInData.ToolTip = "Open the author's LinkedIn profile.";
-            linkedInData.LongDescription = Branding.LinkedInUrl;
-            linkedInData.Image = Branding.LinkedInSmall;
-            linkedInData.LargeImage = Branding.LinkedInLarge;
-
-            panel.AddStackedItems(aboutData, linkedInData);
+            // About, Check for Updates and LinkedIn are on the AB Adv Tools shared panel.
 
             UpdateAutoStartCaption(BridgeService.ReadAutoStart());
             UpdateCodeExecutionCaption(BridgeService.ReadAllowCodeExecution());
-        }
-
-        private static RibbonPanel FindOrCreatePanel(UIControlledApplication application, string tab, string panelName)
-        {
-            foreach (RibbonPanel existing in application.GetRibbonPanels(tab))
-            {
-                if (string.Equals(existing.Name, panelName, StringComparison.Ordinal)) return existing;
-            }
-            return application.CreateRibbonPanel(tab, panelName);
         }
 
         /// <summary>

@@ -2,6 +2,8 @@ using System;
 using AB.RevitMcp.Addin.Bridge;
 using AB.RevitMcp.Addin.Ui;
 using AB.RevitMcp.Contracts.Json;
+using ABAdvTools;
+using ABAdvTools.Revit;
 using Autodesk.Revit.ApplicationServices;
 using Autodesk.Revit.DB.Events;
 using Autodesk.Revit.UI;
@@ -24,6 +26,14 @@ namespace AB.RevitMcp.Addin
         {
             try
             {
+                // The AB Adv Tools suite: shared ribbon tab and About panel, and a background check
+                // for a newer release on GitHub. Never allowed to stop the bridge from loading.
+                try
+                {
+                    RevitAdvTools.Initialize(application, Product);
+                }
+                catch (Exception) { }
+
                 RibbonBuilder.Build(application);
 
                 _service = new BridgeService(application);
@@ -48,6 +58,41 @@ namespace AB.RevitMcp.Addin
             }
         }
 
+        /// <summary>
+        /// The bridge as the AB Adv Tools suite knows it. Details and the log-folder button carry
+        /// what the bridge's own About dialog showed before it joined the suite.
+        /// </summary>
+        private static AdvToolsProduct Product
+        {
+            get
+            {
+                var product = new AdvToolsProduct(
+                    "RevitMcp", Branding.ProductName,
+                    "Lets any MCP-compatible AI client query and edit the open Revit model",
+                    AdvToolsHost.Revit, "AB.RevitMcp", typeof(App).Assembly);
+
+                product.Details = delegate
+                {
+                    BridgeService service = BridgeService.Current;
+                    string nl = Environment.NewLine;
+                    return "A universal Model Context Protocol bridge for Autodesk Revit 2020-2026. Any MCP-compatible " +
+                           "AI client - Claude, Cursor, VS Code, DeepSeek, a local model - can query and edit the open " +
+                           "Revit model through " + AB.RevitMcp.Contracts.Tools.ToolCatalog.Count + " tools." + nl +
+                           (service != null ? "Revit " + service.RevitVersion + "   |   " : string.Empty) +
+                           "Units: millimetres, m2, m3, degrees";
+                };
+
+                product.AddAction("Open the log folder", delegate
+                {
+                    string folder = AB.RevitMcp.Contracts.Protocol.IpcConstants.LogDirectory;
+                    System.IO.Directory.CreateDirectory(folder);
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(folder) { UseShellExecute = true });
+                });
+
+                return product;
+            }
+        }
+
         public Result OnShutdown(UIControlledApplication application)
         {
             try
@@ -58,6 +103,8 @@ namespace AB.RevitMcp.Addin
                     _controlled.DocumentOpened -= OnDocumentChanged;
                     _controlled.DocumentClosed -= OnDocumentChanged;
                 }
+
+                RevitAdvTools.Shutdown(application);
 
                 if (_service != null)
                 {

@@ -20,7 +20,11 @@ param(
 
     [string] $RevitProgramRoot = 'C:\Program Files\Autodesk',
 
-    [switch] $SkipServer
+    [switch] $SkipServer,
+
+    # Compile against the Revit installs on this machine instead of the pinned reference packages.
+    # Only then does a release need to be installed to be built.
+    [switch] $UseInstalledRevit
 )
 
 $ErrorActionPreference = 'Stop'
@@ -47,7 +51,10 @@ foreach ($version in $Versions) {
     $apiDir = Join-Path $RevitProgramRoot ("Revit {0}" -f $version)
     $apiDll = Join-Path $apiDir 'RevitAPI.dll'
 
-    if (-not (Test-Path $apiDll)) {
+    # The project compiles against pinned reference packages by default (see the .csproj), so an
+    # installed Revit only matters when building against local installs. Skipping uninstalled
+    # releases here used to leave 2021, 2023 and 2025 out of installers built on this machine.
+    if ($UseInstalledRevit -and -not (Test-Path $apiDll)) {
         Write-Host ("  SKIP  Revit {0} - RevitAPI.dll not found in {1}" -f $version, $apiDir) -ForegroundColor DarkGray
         $skipped += $version
         continue
@@ -56,11 +63,13 @@ foreach ($version in $Versions) {
     $tfm = Get-TargetFramework $version
     Write-Host ("  BUILD Revit {0} ({1})" -f $version, $tfm) -ForegroundColor Yellow
 
+    $packages = if ($UseInstalledRevit) { 'false' } else { 'true' }
     & dotnet build $addinProj `
         -c $Configuration `
         -f $tfm `
         -p:RevitVersion=$version `
         -p:RevitProgramRoot=$RevitProgramRoot `
+        -p:UseRevitApiPackages=$packages `
         --nologo -v quiet | Out-Null
 
     if ($LASTEXITCODE -ne 0) {

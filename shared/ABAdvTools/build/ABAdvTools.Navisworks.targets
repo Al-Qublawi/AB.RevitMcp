@@ -1,0 +1,57 @@
+<Project>
+
+  <!--
+    AB Adv Tools kit for a Navisworks plugin project. One line in the .csproj:
+
+        <Import Project="..\..\shared\ABAdvTools\build\ABAdvTools.Navisworks.targets" />
+
+    Compiles the kit INTO the plugin (no shared DLL to version-conflict), embeds the About
+    dialog logo, and copies the shared panel's button icons into the plugin's Images folder,
+    where Navisworks resolves the Icon / LargeIcon names on each [Command] attribute.
+
+    The plugin's ribbon XAML must also contain the shared panel - see
+    templates\Navisworks.SharedPanel.xaml, which sync-kit.ps1 keeps up to date.
+  -->
+
+  <PropertyGroup>
+    <ABAdvToolsKitRoot>$(MSBuildThisFileDirectory)..\</ABAdvToolsKitRoot>
+    <DefineConstants>$(DefineConstants);ABADVTOOLS_NAVISWORKS</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(ABAdvToolsKitRoot)src\Common\**\*.cs" LinkBase="ABAdvTools\Common" />
+    <Compile Include="$(ABAdvToolsKitRoot)src\Navisworks\**\*.cs" LinkBase="ABAdvTools\Navisworks" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="$(ABAdvToolsKitRoot)assets\abadv_64.png" LogicalName="ABAdvTools.Assets.abadv_64.png" Link="ABAdvTools\Assets\abadv_64.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="$(ABAdvToolsKitRoot)assets\abadv_about_16.ico" Link="Images\abadv_about_16.ico" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="$(ABAdvToolsKitRoot)assets\abadv_about_32.ico" Link="Images\abadv_about_32.ico" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="$(ABAdvToolsKitRoot)assets\abadv_update_16.ico" Link="Images\abadv_update_16.ico" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="$(ABAdvToolsKitRoot)assets\abadv_update_32.ico" Link="Images\abadv_update_32.ico" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="$(ABAdvToolsKitRoot)assets\abadv_linkedin_16.ico" Link="Images\abadv_linkedin_16.ico" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="$(ABAdvToolsKitRoot)assets\abadv_linkedin_32.ico" Link="Images\abadv_linkedin_32.ico" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Net.Http" />
+  </ItemGroup>
+
+  <!--
+    Fails the build if the ribbon XAML has lost the shared panel or the shared tab id, rather than
+    shipping a plugin that silently sits on a tab of its own.
+  -->
+  <Target Name="ABAdvToolsValidateRibbon" BeforeTargets="Build" Condition="'$(ABAdvToolsRibbonXaml)' != ''">
+    <PropertyGroup>
+      <_ABAdvToolsXamlText>$([System.IO.File]::ReadAllText('$(ABAdvToolsRibbonXaml)'))</_ABAdvToolsXamlText>
+    </PropertyGroup>
+    <Error Condition="!$(_ABAdvToolsXamlText.Contains('Id=&quot;ID_ABAdvTools&quot;'))"
+           Text="$(ABAdvToolsRibbonXaml): the RibbonTab must use Id=&quot;ID_ABAdvTools&quot; so it joins the AB Adv Tools tab." />
+    <Error Condition="!$(_ABAdvToolsXamlText.Contains('Id=&quot;ABADV_SharedPanel&quot;'))"
+           Text="$(ABAdvToolsRibbonXaml): the shared AB Adv Tools panel is missing. Run sync-kit.ps1 or paste templates\Navisworks.SharedPanel.xaml." />
+  </Target>
+
+</Project>

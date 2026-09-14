@@ -3,6 +3,36 @@
 All notable changes to this project are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] — 2026-09-14
+
+### Changed
+- **The add-in moved to the shared `AB Adv Tools` ribbon tab**, which every AB add-in for Revit now
+  uses, as the **MCP Bridge** panel (formerly the *Bridge* panel on its own *AB MCP AI* tab). All
+  bridge buttons are unchanged. About and LinkedIn moved to the suite's shared **AB Adv Tools**
+  panel at the end of the tab, which also lists every AB tool loaded, with versions.
+- **New installer engine.** `AB.RevitMcp.Setup.exe` is now built on the AB Adv Tools installer
+  engine (`shared\ABAdvTools`): it detects an earlier copy of the bridge and offers to remove it
+  before installing, registers in Apps and Features (per user, no elevation), and adds
+  `/uninstall`, `/scan` and `/log:<file>`. Everything the 1.3 installer did is kept: the Revit and
+  AI-agent lists, **Add custom agent…** (any JSON or YAML MCP config, with its own server-map key),
+  **Verify** at any time without installing, carrying on with Revit open (a locked release is
+  skipped and reported, the rest install), `/silent`, `/noclients`, and the
+  `%TEMP%\ABRevitMcp-Setup-*.log` silent log.
+- **About** is the suite's shared About dialog; selecting the bridge shows what its own About showed
+  (tool count, Revit version, units) with an **Open the log folder** button.
+- `build-all.ps1` builds every Revit release from the pinned reference packages, so an installer
+  built on any machine carries 2020 – 2026. It used to skip releases not installed locally, even
+  though the project no longer needs them. `-UseInstalledRevit` keeps the old behaviour.
+
+### Added
+- **Release notifications.** Once a day at most, in the background, the add-in checks this
+  repository's latest GitHub release and says so once per new version. **Check for Updates** on
+  the ribbon checks immediately. Anonymous, no telemetry; off switch in **AB Adv Tools › About**.
+
+### Fixed
+- The version shown in the About dialog was a hand-kept constant that still said 1.1.0. It now
+  comes from the build.
+
 ## [1.3.0] — 2026-09-12
 
 ### Fixed

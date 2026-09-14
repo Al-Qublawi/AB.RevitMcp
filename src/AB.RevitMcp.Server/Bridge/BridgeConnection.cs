@@ -73,7 +73,7 @@ namespace AB.RevitMcp.Server.Bridge
                 Drop();
                 throw new BridgeUnavailableException(
                     "The connection to Revit was lost (" + ex.Message + "). " +
-                    "If Revit is still open, press Stop then Start on the AB MCP AI ribbon and retry.");
+                    "If Revit is still open, press Stop then Start on the AB Adv Tools ribbon and retry.");
             }
             catch (ObjectDisposedException)
             {
@@ -149,7 +149,7 @@ namespace AB.RevitMcp.Server.Bridge
                         : " for Revit " + _options.RevitVersion + ".") +
                     "\n\nTo fix this:\n" +
                     "  1. Open Autodesk Revit and load a project.\n" +
-                    "  2. Go to the 'AB MCP AI' ribbon tab and press 'Start Bridge'.\n" +
+                    "  2. Go to the 'AB Adv Tools' ribbon tab and press 'Start Bridge'.\n" +
                     "  3. Retry this request - no need to restart your AI client.\n\n" +
                     "Discovery folder: " + IpcConstants.EndpointDirectory);
             }
@@ -173,7 +173,7 @@ namespace AB.RevitMcp.Server.Bridge
         {
             return "Could not connect to the Revit bridge on pipe '" + pipeName + "'. " +
                    "Revit may have closed, or the bridge may have been stopped. " +
-                   "Open Revit, go to the 'AB MCP AI' ribbon tab and press 'Start Bridge'.";
+                   "Open Revit, go to the 'AB Adv Tools' ribbon tab and press 'Start Bridge'.";
         }
 
         private void Drop()

@@ -53,7 +53,7 @@ namespace AB.RevitMcp.Addin.Tools
             {
                 throw new ToolException(BridgeErrorCodes.ConfirmationRequired,
                     "Code execution is DISABLED in this Revit session. A human must turn it on from " +
-                    "the AB MCP AI ribbon tab (\"Code exec\" button) before this tool will run. " +
+                    "the AB Adv Tools ribbon tab (\"Code exec\" button) before this tool will run. " +
                     "Prefer one of the other " + (Contracts.Tools.ToolCatalog.Count - 1) +
                     " tools - they are schema-validated and far safer.");
             }

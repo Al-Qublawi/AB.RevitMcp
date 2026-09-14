@@ -162,7 +162,7 @@ namespace AB.RevitMcp.MockBridge
                         }
                         return BridgeResponse.Failure(request.Id, BridgeErrorCodes.NoActiveDocument,
                             "'" + request.Tool + "' is a real tool, but the MOCK bridge does not implement it. " +
-                            "Start Revit and press Start Bridge on the AB MCP AI ribbon to use it.");
+                            "Start Revit and press Start Bridge on the AB Adv Tools ribbon to use it.");
                     }
             }
         }

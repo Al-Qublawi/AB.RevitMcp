@@ -1,0 +1,34 @@
+    <!-- BEGIN AB ADV TOOLS SHARED PANEL - kept identical in every AB plugin by sync-kit.ps1; do not edit here -->
+    <!--
+      Every AB plugin carries this panel. At runtime NavisworksRibbonMerger keeps exactly one,
+      last on the AB Adv Tools tab; its buttons are handled by NavisworksAdvTools, so whichever
+      plugin's copy survives behaves the same. The Id on RibbonPanelSource is how it is found.
+    -->
+    <RibbonPanel x:Uid="ABADV_Panel_Shared">
+      <RibbonPanelSource x:Uid="ABADV_Source_Shared" Id="ABADV_SharedPanel" KeyTip="AV" Title="AB Adv Tools">
+
+        <local:NWRibbonButton x:Uid="ABADV_About" Id="ID_ABADV_About"
+                              Size="Large"
+                              KeyTip="AA"
+                              ShowText="True"
+                              Orientation="Vertical" />
+
+        <RibbonRowPanel x:Uid="ABADV_Row_Shared">
+
+          <local:NWRibbonButton x:Uid="ABADV_Updates" Id="ID_ABADV_Updates"
+                                KeyTip="AU"
+                                ShowText="True"
+                                Orientation="Horizontal" />
+
+          <RibbonRowBreak x:Uid="ABADV_Break_Shared" />
+
+          <local:NWRibbonButton x:Uid="ABADV_LinkedIn" Id="ID_ABADV_LinkedIn"
+                                KeyTip="AL"
+                                ShowText="True"
+                                Orientation="Horizontal" />
+
+        </RibbonRowPanel>
+
+      </RibbonPanelSource>
+    </RibbonPanel>
+    <!-- END AB ADV TOOLS SHARED PANEL -->

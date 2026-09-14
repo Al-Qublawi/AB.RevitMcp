@@ -300,64 +300,8 @@ namespace AB.RevitMcp.Addin.Ui
             }
         }
 
-        // ==================================================================
-        //  About / author
-        // ==================================================================
-        [Transaction(TransactionMode.Manual)]
-        public class OpenLinkedInCommand : IExternalCommand
-        {
-            public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
-            {
-                try
-                {
-                    Process.Start(new ProcessStartInfo(Branding.LinkedInUrl) { UseShellExecute = true });
-                    return Result.Succeeded;
-                }
-                catch (Exception ex)
-                {
-                    TaskDialog.Show(Branding.ProductName,
-                        "Could not open the browser." + Environment.NewLine + Environment.NewLine +
-                        Branding.LinkedInUrl + Environment.NewLine + Environment.NewLine + ex.Message);
-                    return Result.Succeeded;
-                }
-            }
-        }
-
-        [Transaction(TransactionMode.Manual)]
-        public class ShowAboutCommand : IExternalCommand
-        {
-            public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
-            {
-                BridgeService service = BridgeService.Current;
-
-                var dialog = new TaskDialog(Branding.ProductName);
-                dialog.MainInstruction = Branding.ProductName + "  " + Branding.Version;
-                string nl = Environment.NewLine;
-                dialog.MainContent =
-                    "A universal Model Context Protocol bridge for Autodesk Revit 2020-2026." + nl + nl +
-                    "Any MCP-compatible AI client - Claude, Cursor, VS Code, DeepSeek, a local model - " +
-                    "can query and edit the open Revit model through " + ToolCatalog.Count + " tools." + nl + nl +
-                    "Author     " + Branding.Author + nl +
-                    "LinkedIn   " + Branding.LinkedInUrl + nl +
-                    (service != null ? "Revit      " + service.RevitVersion + nl : string.Empty) +
-                    "Units      millimetres, m2, m3, degrees";
-                dialog.CommonButtons = TaskDialogCommonButtons.Close;
-                dialog.AddCommandLink(TaskDialogCommandLinkId.CommandLink1, Branding.LinkedInCaption);
-                dialog.AddCommandLink(TaskDialogCommandLinkId.CommandLink2, "Open the log folder");
-
-                TaskDialogResult result = dialog.Show();
-                if (result == TaskDialogResult.CommandLink1)
-                {
-                    try { Process.Start(new ProcessStartInfo(Branding.LinkedInUrl) { UseShellExecute = true }); }
-                    catch (Exception) { }
-                }
-                else if (result == TaskDialogResult.CommandLink2)
-                {
-                    OpenFolder(IpcConstants.LogDirectory);
-                }
-                return Result.Succeeded;
-            }
-        }
+        // About, Check for Updates and LinkedIn moved to the AB Adv Tools shared panel
+        // (ABAdvTools.Revit), which every AB add-in shares.
 
         // ==================================================================
         //  helper

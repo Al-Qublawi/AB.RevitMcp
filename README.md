@@ -94,10 +94,11 @@ Close Revit, then run it:
 AB.RevitMcp.Setup.exe
 ```
 
-One file, about 32 MB, no prerequisites beyond .NET Framework 4.8 (which Revit itself
-requires). It detects every Revit release on the machine, installs only the ones you tick,
-registers the server with your AI clients, and verifies the result. No admin rights, no
-registry, no services.
+One file, about 33 MB, no prerequisites beyond .NET Framework 4.8 (which Revit itself
+requires). It detects every Revit release on the machine, **finds any earlier copy of the
+bridge and offers to remove it first**, installs only the releases you tick, registers the
+server with your AI clients, and verifies the result. Everything is per user: no admin
+rights, no services. It appears in Apps and Features for a normal uninstall.
 
 > **The published build is not code-signed.** On a managed machine, Windows Defender's
 > Attack Surface Reduction rule *"Block executable files from running unless they meet a
@@ -110,10 +111,27 @@ For unattended IT deployment:
 ```
 AB.RevitMcp.Setup.exe /silent             :: every supported release, clients configured
 AB.RevitMcp.Setup.exe /silent /noclients  :: skip AI client registration
+AB.RevitMcp.Setup.exe /uninstall /silent  :: remove it again
+AB.RevitMcp.Setup.exe /scan               :: report what is installed, change nothing
 ```
 
 Silent runs print to the calling console and always write a log to
-`%TEMP%\ABRevitMcp-Setup-*.log`.
+`%TEMP%\ABRevitMcp-Setup-*.log`, as before (or `/log:<file>`).
+
+In the window you can still tick which Revit releases and AI agents to configure, add a custom agent
+(any MCP config file, JSON or YAML, with its own server-map key), run **Verify** at any time without
+installing, and carry on with Revit open — a release Revit has locked is skipped and reported.
+
+The installer is built on the AB Adv Tools installer engine shared by every AB add-in
+(`shared\ABAdvTools`).
+
+### Release notifications
+
+Once a day at most, in the background, the add-in asks GitHub whether a newer release of this
+repository exists, and says so **once per version** when Revit is idle with a view open.
+Nothing is sent but an anonymous request for the latest release. **Check for Updates** on the
+AB Adv Tools tab checks immediately; the checkbox in **AB Adv Tools › About** switches the
+automatic check off for every AB add-in.
 
 Build the installer yourself with:
 
@@ -167,11 +185,12 @@ Doctor warns if the add-in ever ends up loading from there.
 Then:
 
 1. Start Revit and open a project.
-2. Open the **AB MCP AI** ribbon tab → **Bridge** panel → press **Start Bridge**.
+2. Open the **AB Adv Tools** ribbon tab → **MCP Bridge** panel → press **Start Bridge**.
    The icon turns amber (listening) and then green when a client attaches.
 3. Press **Copy config** to put a ready-to-paste `mcpServers` block on the clipboard.
 
-To remove everything: `UNINSTALL.bat` (or `.\build\uninstall.ps1`).
+To remove everything: **Apps and Features › AB Revit MCP Bridge**, or for a developer install
+`UNINSTALL.bat` (or `.\build\uninstall.ps1`).
 
 ### Verify without starting Revit
 
@@ -356,5 +375,5 @@ counters and the last dozen entries without touching the disk.
 **Abdullah Lotfy**  
 [linkedin.com/in/abdullahalqublawi](https://www.linkedin.com/in/abdullahalqublawi/)
 
-The Revit ribbon carries an **About** button and a LinkedIn link on the *AB MCP AI* tab, and
+The **AB Adv Tools** ribbon tab, shared by every AB add-in, carries an **About** button, **Check for Updates** and a LinkedIn link, and
 the add-in manifest records the same details as its vendor.

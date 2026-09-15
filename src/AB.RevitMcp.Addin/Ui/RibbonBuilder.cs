@@ -95,6 +95,23 @@ namespace AB.RevitMcp.Addin.Ui
             if (stacked != null && stacked.Count > 1) _autoStartButton = stacked[1] as PushButton;
             if (stacked != null && stacked.Count > 2) _codeExecButton = stacked[2] as PushButton;
 
+            // ---- AI clients: what Setup.exe's window offered until 1.4.0 (the .msi runs no code) ----
+            var aiClientsData = new PushButtonData(
+                "ABMcpAiClients", "AI Clients", assemblyPath, typeof(Commands.AiClientsCommand).FullName);
+            aiClientsData.ToolTip = "Point Claude, Cursor, VS Code or any other MCP client at the Revit MCP server - " +
+                                    "or a custom agent - and take it out again.";
+            aiClientsData.LongDescription =
+                "Existing configuration files are backed up first. The installer's choice of clients is applied " +
+                "here automatically the first time Revit starts after installing.";
+            aiClientsData.Image = IconFactory.Badge(16, IconFactory.Accent);
+
+            var verifyData = new PushButtonData(
+                "ABMcpVerify", "Verify", assemblyPath, typeof(Commands.VerifyCommand).FullName);
+            verifyData.ToolTip = "Check the whole chain - the server, how AI clients start it, and this bridge - with the server's doctor.";
+            verifyData.Image = IconFactory.Badge(16, IconFactory.Connected);
+
+            panel.AddStackedItems(aiClientsData, verifyData);
+
             // About, Check for Updates and LinkedIn are on the AB Adv Tools shared panel.
 
             UpdateAutoStartCaption(BridgeService.ReadAutoStart());

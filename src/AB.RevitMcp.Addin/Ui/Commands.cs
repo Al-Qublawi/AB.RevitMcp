@@ -180,8 +180,19 @@ namespace AB.RevitMcp.Addin.Ui
                 }
 
                 JsonValue server = JsonValue.NewObject();
-                server.Set("command", serverPath ?? "C:\\\\Program Files\\\\ABRevitMcp\\\\Server\\\\AB.RevitMcp.Server.exe");
-                server.Set("args", JsonValue.NewArray());
+                if (serverPresent)
+                {
+                    // Started the way the AI Clients window configures it: through dotnet.exe when that
+                    // works, so Defender's rule against unknown executables cannot block the server.
+                    AiClients.LaunchSpec spec = AiClients.LaunchSpec.For(serverPath, null);
+                    server.Set("command", spec.Command);
+                    server.Set("args", spec.ArgsJson());
+                }
+                else
+                {
+                    server.Set("command", serverPath ?? "C:\\\\Program Files\\\\ABRevitMcp\\\\Server\\\\AB.RevitMcp.Server.exe");
+                    server.Set("args", JsonValue.NewArray());
+                }
                 server.Set("env", env);
 
                 JsonValue servers = JsonValue.NewObject();
@@ -207,7 +218,7 @@ namespace AB.RevitMcp.Addin.Ui
                     "  Cursor           %USERPROFILE%\\.cursor\\mcp.json\n" +
                     "  VS Code          .vscode\\mcp.json\n\n" +
                     (serverPresent
-                        ? "The server executable was found next to the add-in."
+                        ? "The server was found. AI Clients on this panel writes these files for you."
                         : "WARNING: the server executable was not found at the path below. " +
                           "Install it, then edit the \"command\" value to match.");
                 dialog.ExpandedContent = json;
@@ -296,6 +307,29 @@ namespace AB.RevitMcp.Addin.Ui
                     enabling
                         ? "Code execution is ON for this machine. Turn it off when you are done."
                         : "Code execution is OFF. revit_execute_code will refuse every call.");
+                return Result.Succeeded;
+            }
+        }
+
+        // ==================================================================
+        //  AI clients and Verify (Setup.exe's window until 1.4.0)
+        // ==================================================================
+        [Transaction(TransactionMode.Manual)]
+        public class AiClientsCommand : IExternalCommand
+        {
+            public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
+            {
+                AiClients.AiClientsForm.ShowWindow(false);
+                return Result.Succeeded;
+            }
+        }
+
+        [Transaction(TransactionMode.Manual)]
+        public class VerifyCommand : IExternalCommand
+        {
+            public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
+            {
+                AiClients.AiClientsForm.ShowWindow(true);
                 return Result.Succeeded;
             }
         }

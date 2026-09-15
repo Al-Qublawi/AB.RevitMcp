@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  AB Adv Tools kit - the pages every AB .msi shares.
+
+  Compiled into each add-in's package by msi\New-AdvToolsMsi.ps1, which also writes the product's
+  own "Choose releases" page and the Next / Back order between pages (it depends on which pages a
+  product has). Text comes from properties the generator sets: AB_DESCRIPTION, AB_HOSTSUMMARY,
+  AB_DISPLAYVERSION, AB_NEXTSTEPS, AB_REMOVEDTEXT, AB_RELEASEURL, AB_SCOPENOTE.
+
+  RULE: nothing here may run code. No DLL, EXE or script custom actions, not even on a button -
+  company PCs with Defender's attack surface reduction rules block unknown code, and blocking it
+  is exactly why these installers are .msi files. New-AdvToolsMsi.ps1 refuses to ship a package
+  with any custom action other than "set a property" (51), "set a folder" (35) or "show an
+  error" (19). The standard WixUI pages referenced below were checked to add none.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <Fragment>
+    <UI Id="ABAdvTools_Common">
+      <TextStyle Id="WixUI_Font_Normal" FaceName="Tahoma" Size="8" />
+      <TextStyle Id="WixUI_Font_Bigger" FaceName="Tahoma" Size="12" />
+      <TextStyle Id="WixUI_Font_Title" FaceName="Tahoma" Size="9" Bold="yes" />
+      <TextStyle Id="WixUI_Font_Emphasized" FaceName="Tahoma" Size="8" Bold="yes" />
+      <TextStyle Id="ABAdv_Font_Note" FaceName="Tahoma" Size="8" Red="96" Green="96" Blue="96" />
+      <Property Id="DefaultUIFont" Value="WixUI_Font_Normal" />
+
+      <!-- Standard Windows Installer pages: progress, errors, files in use, cancel. -->
+      <DialogRef Id="ErrorDlg" />
+      <DialogRef Id="FilesInUse" />
+      <DialogRef Id="MsiRMFilesInUse" />
+      <DialogRef Id="PrepareDlg" />
+      <DialogRef Id="ProgressDlg" />
+      <DialogRef Id="ResumeDlg" />
+      <DialogRef Id="VerifyReadyDlg" />
+      <DialogRef Id="MaintenanceWelcomeDlg" />
+      <DialogRef Id="MaintenanceTypeDlg" />
+      <DialogRef Id="ABWelcomeDlg" />
+      <DialogRef Id="ABExitDlg" />
+      <DialogRef Id="ABUserExitDlg" />
+      <DialogRef Id="ABFatalErrorDlg" />
+      <DialogRef Id="ABNoReleaseDlg" />
+
+      <Publish Dialog="ABExitDlg" Control="Finish" Event="EndDialog" Value="Return" Order="999" />
+      <Publish Dialog="ABUserExitDlg" Control="Finish" Event="EndDialog" Value="Exit" Order="999" />
+      <Publish Dialog="ABFatalErrorDlg" Control="Finish" Event="EndDialog" Value="Exit" Order="999" />
+      <Publish Dialog="MaintenanceWelcomeDlg" Control="Next" Event="NewDialog" Value="MaintenanceTypeDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="RepairButton" Event="NewDialog" Value="VerifyReadyDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="RemoveButton" Event="NewDialog" Value="VerifyReadyDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="Back" Event="NewDialog" Value="MaintenanceWelcomeDlg" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="MaintenanceTypeDlg" Condition="Installed" />
+
+      <InstallUISequence>
+        <Show Dialog="ABWelcomeDlg" Before="ProgressDlg" Condition="NOT Installed" />
+        <Show Dialog="ABExitDlg" OnExit="success" />
+        <Show Dialog="ABUserExitDlg" OnExit="cancel" />
+        <Show Dialog="ABFatalErrorDlg" OnExit="error" />
+      </InstallUISequence>
+      <AdminUISequence>
+        <Show Dialog="ABExitDlg" OnExit="success" />
+        <Show Dialog="ABUserExitDlg" OnExit="cancel" />
+        <Show Dialog="ABFatalErrorDlg" OnExit="error" />
+      </AdminUISequence>
+    </UI>
+    <UIRef Id="WixUI_Common" />
+  </Fragment>
+
+  <!-- ================================================================== welcome -->
+  <Fragment>
+    <UI>
+      <Dialog Id="ABWelcomeDlg" Width="370" Height="270" Title="[ProductName] Setup">
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="&amp;Next &gt;" />
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="Cancel">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+        <Control Id="Bitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="234" TabSkip="no" Text="WixUI_Bmp_Dialog" />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Disabled="yes" Text="&lt; &amp;Back" />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Title" Type="Text" X="135" Y="20" Width="220" Height="40" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Bigger}Welcome to [ProductName] [AB_DISPLAYVERSION]" />
+        <Control Id="Description" Type="Text" X="135" Y="66" Width="220" Height="84" Transparent="yes" NoPrefix="yes" Text="[AB_DESCRIPTION]" />
+        <Control Id="Hosts" Type="Text" X="135" Y="152" Width="220" Height="28" Transparent="yes" NoPrefix="yes" Text="For [AB_HOSTSUMMARY]." />
+        <Control Id="Upgrade" Type="Text" X="135" Y="184" Width="220" Height="20" Transparent="yes" NoPrefix="yes" Hidden="yes" ShowCondition="WIX_UPGRADE_DETECTED" Text="{\WixUI_Font_Emphasized}The version already installed will be upgraded." />
+        <Control Id="Suite" Type="Text" X="135" Y="212" Width="220" Height="14" Transparent="yes" NoPrefix="yes" Text="{\ABAdv_Font_Note}Part of AB Adv Tools. Click Next to continue." />
+      </Dialog>
+    </UI>
+  </Fragment>
+
+  <!-- ================================================================== licence / read-me -->
+  <Fragment>
+    <UI>
+      <Dialog Id="ABLicenseDlg" Width="370" Height="270" Title="[ProductName] Setup">
+        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="WixUI_Bmp_Banner" />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="300" Height="15" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}Before you install" />
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="300" Height="15" Transparent="yes" NoPrefix="yes" Text="Please read the following." />
+        <Control Id="LicenseText" Type="ScrollableText" X="20" Y="54" Width="330" Height="150" Sunken="yes" TabSkip="no">
+          <Text SourceFile="!(wix.ABAdvToolsLicenseRtf)" />
+        </Control>
+        <Control Id="Accept" Type="CheckBox" X="20" Y="210" Width="330" Height="18" CheckBoxValue="1" Property="AB_LICENSE_ACCEPTED" Text="I have &amp;read this and accept the terms" />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="&lt; &amp;Back" />
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="&amp;Next &gt;" DisableCondition="AB_LICENSE_ACCEPTED &lt;&gt; &quot;1&quot;" EnableCondition="AB_LICENSE_ACCEPTED = &quot;1&quot;" />
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="Cancel">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+    </UI>
+  </Fragment>
+
+  <!-- ================================================================== who it is for -->
+  <Fragment>
+    <UI>
+      <Dialog Id="ABScopeDlg" Width="370" Height="270" Title="[ProductName] Setup">
+        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="WixUI_Bmp_Banner" />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="300" Height="15" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}Install for" />
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="300" Height="15" Transparent="yes" NoPrefix="yes" Text="Choose who can use [ProductName] on this computer." />
+        <Control Id="Scope" Type="RadioButtonGroup" X="20" Y="60" Width="330" Height="50" Property="AB_SCOPE" DisableCondition="AB_PREVMSI_MACHINE OR AB_PREVMSI_USER">
+          <RadioButtonGroup Property="AB_SCOPE">
+            <RadioButton Value="user" X="0" Y="0" Width="330" Height="16" Text="Only &amp;me ([LogonUser]) - no administrator rights needed" />
+            <RadioButton Value="machine" X="0" Y="24" Width="330" Height="16" Text="&amp;Everyone who uses this computer - needs administrator rights" />
+          </RadioButtonGroup>
+        </Control>
+        <Control Id="LockedMachine" Type="Text" X="20" Y="118" Width="330" Height="30" NoPrefix="yes" Hidden="yes" ShowCondition="AB_PREVMSI_MACHINE" Text="{\WixUI_Font_Emphasized}[ProductName] is already installed for everyone, so it is upgraded for everyone. To change that, remove it in Apps and Features first." />
+        <Control Id="LockedUser" Type="Text" X="20" Y="118" Width="330" Height="30" NoPrefix="yes" Hidden="yes" ShowCondition="AB_PREVMSI_USER AND NOT AB_PREVMSI_MACHINE" Text="{\WixUI_Font_Emphasized}[ProductName] is already installed for you, so it is upgraded for you. To change that, remove it in Apps and Features first." />
+        <Control Id="Note" Type="Text" X="20" Y="156" Width="330" Height="70" NoPrefix="yes" Text="[AB_SCOPENOTE]" />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="&lt; &amp;Back" />
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="&amp;Next &gt;" />
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="Cancel">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+    </UI>
+  </Fragment>
+
+  <!-- ================================================================== earlier Setup.exe copies -->
+  <Fragment>
+    <UI>
+      <Dialog Id="ABEarlierDlg" Width="370" Height="270" Title="[ProductName] Setup">
+        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="WixUI_Bmp_Banner" />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="300" Height="15" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}Earlier versions found" />
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="320" Height="15" Transparent="yes" NoPrefix="yes" Text="Ticked copies are removed before installing. Settings and logs are kept." />
+        <Control Id="Intro" Type="Text" X="20" Y="54" Width="330" Height="24" NoPrefix="yes" Text="These copies of [ProductName] were installed by the AB Adv Tools setup program (Setup.exe):" />
+        <Control Id="RemoveMachine" Type="CheckBox" X="20" Y="82" Width="330" Height="16" CheckBoxValue="1" Property="REMOVEEARLIER_MACHINE" Hidden="yes" ShowCondition="AB_EARLIER_MACHINE" DisableCondition="AB_SCOPE &lt;&gt; &quot;machine&quot;" EnableCondition="AB_SCOPE = &quot;machine&quot;" Text="Version [AB_EARLIER_MACHINE], installed for everyone" />
+        <Control Id="MachineNeedsEveryone" Type="Text" X="36" Y="99" Width="314" Height="22" NoPrefix="yes" Hidden="yes" ShowCondition="AB_EARLIER_MACHINE AND AB_SCOPE &lt;&gt; &quot;machine&quot;" Text="{\ABAdv_Font_Note}Only an install for everyone can remove it. Go back and choose Everyone, or remove it in Apps and Features." />
+        <Control Id="RemoveUser" Type="CheckBox" X="20" Y="126" Width="330" Height="16" CheckBoxValue="1" Property="REMOVEEARLIER_USER" Hidden="yes" ShowCondition="AB_EARLIER_USER" Text="Version [AB_EARLIER_USER], installed for [LogonUser] only" />
+        <Control Id="Keep" Type="Text" X="20" Y="152" Width="330" Height="24" NoPrefix="yes" Text="{\ABAdv_Font_Note}Keeping an earlier copy is not recommended: the add-in would then load twice." />
+        <Control Id="Upgrade" Type="Text" X="20" Y="184" Width="330" Height="24" NoPrefix="yes" Hidden="yes" ShowCondition="WIX_UPGRADE_DETECTED" Text="An earlier .msi version is installed as well. It is upgraded automatically." />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="&lt; &amp;Back" />
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="&amp;Next &gt;" />
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="Cancel">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+    </UI>
+  </Fragment>
+
+  <!-- ================================================================== nothing ticked -->
+  <Fragment>
+    <UI>
+      <Dialog Id="ABNoReleaseDlg" Width="260" Height="85" Title="[ProductName] Setup" NoMinimize="yes">
+        <Control Id="Text" Type="Text" X="15" Y="15" Width="230" Height="35" NoPrefix="yes" Text="Tick at least one release to install [ProductName] into." />
+        <Control Id="OK" Type="PushButton" X="102" Y="57" Width="56" Height="17" Default="yes" Cancel="yes" Text="OK">
+          <Publish Event="EndDialog" Value="Return" />
+        </Control>
+      </Dialog>
+    </UI>
+  </Fragment>
+
+  <!-- ================================================================== cancelled / failed -->
+  <Fragment>
+    <UI>
+      <Dialog Id="ABUserExitDlg" Width="370" Height="270" Title="[ProductName] Setup">
+        <Control Id="Finish" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Cancel="yes" Text="&amp;Finish" />
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Disabled="yes" Text="Cancel" />
+        <Control Id="Bitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="234" TabSkip="no" Text="WixUI_Bmp_Dialog" />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Disabled="yes" Text="&lt; &amp;Back" />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Title" Type="Text" X="135" Y="20" Width="220" Height="40" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Bigger}Setup was cancelled" />
+        <Control Id="Description" Type="Text" X="135" Y="66" Width="220" Height="80" Transparent="yes" NoPrefix="yes" Text="Nothing on this computer was changed. Run this installer again whenever you are ready." />
+      </Dialog>
+    </UI>
+  </Fragment>
+
+  <Fragment>
+    <UI>
+      <Dialog Id="ABFatalErrorDlg" Width="370" Height="270" Title="[ProductName] Setup">
+        <Control Id="Finish" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Cancel="yes" Text="&amp;Finish" />
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Disabled="yes" Text="Cancel" />
+        <Control Id="Bitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="234" TabSkip="no" Text="WixUI_Bmp_Dialog" />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Disabled="yes" Text="&lt; &amp;Back" />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Title" Type="Text" X="135" Y="20" Width="220" Height="40" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Bigger}[ProductName] was not installed" />
+        <Control Id="Description" Type="Text" X="135" Y="66" Width="220" Height="110" Transparent="yes" NoPrefix="yes" Text="Setup ended before it finished, and undid what it had started, so the computer is as it was. For the details, run it again from a command prompt with a log: msiexec /i &quot;[OriginalDatabase]&quot; /l*v setup.log" />
+      </Dialog>
+    </UI>
+  </Fragment>
+
+  <!-- ================================================================== finished -->
+  <Fragment>
+    <UI>
+      <Dialog Id="ABExitDlg" Width="370" Height="270" Title="[ProductName] Setup">
+        <Control Id="Finish" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Cancel="yes" Text="&amp;Finish" />
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Disabled="yes" Text="Cancel" />
+        <Control Id="Bitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="234" TabSkip="no" Text="WixUI_Bmp_Dialog" />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Disabled="yes" Text="&lt; &amp;Back" />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="TitleInstalled" Type="Text" X="135" Y="20" Width="220" Height="40" Transparent="yes" NoPrefix="yes" HideCondition="WixUI_InstallMode = &quot;Remove&quot; OR WixUI_InstallMode = &quot;Repair&quot;" Text="{\WixUI_Font_Bigger}[ProductName] [AB_DISPLAYVERSION] is installed" />
+        <Control Id="TitleRepaired" Type="Text" X="135" Y="20" Width="220" Height="40" Transparent="yes" NoPrefix="yes" Hidden="yes" ShowCondition="WixUI_InstallMode = &quot;Repair&quot;" Text="{\WixUI_Font_Bigger}[ProductName] is repaired" />
+        <Control Id="TitleRemoved" Type="Text" X="135" Y="20" Width="220" Height="40" Transparent="yes" NoPrefix="yes" Hidden="yes" ShowCondition="WixUI_InstallMode = &quot;Remove&quot;" Text="{\WixUI_Font_Bigger}[ProductName] is removed" />
+        <Control Id="NextSteps" Type="Text" X="135" Y="66" Width="220" Height="104" Transparent="yes" NoPrefix="yes" HideCondition="WixUI_InstallMode = &quot;Remove&quot;" Text="[AB_NEXTSTEPS]" />
+        <Control Id="Removed" Type="Text" X="135" Y="66" Width="220" Height="104" Transparent="yes" NoPrefix="yes" Hidden="yes" ShowCondition="WixUI_InstallMode = &quot;Remove&quot;" Text="[AB_REMOVEDTEXT]" />
+        <Control Id="ReleaseNotes" Type="Hyperlink" X="135" Y="180" Width="220" Height="14" HideCondition="WixUI_InstallMode = &quot;Remove&quot;" Text="&lt;a href=&quot;[AB_RELEASEURL]&quot;&gt;Release notes on GitHub&lt;/a&gt;" />
+        <Control Id="Suite" Type="Text" X="135" Y="212" Width="220" Height="14" Transparent="yes" NoPrefix="yes" Text="{\ABAdv_Font_Note}Click Finish to close." />
+      </Dialog>
+    </UI>
+  </Fragment>
+
+</Wix>

@@ -82,6 +82,9 @@ namespace AB.RevitMcp.Addin
                            "Units: millimetres, m2, m3, degrees";
                 };
 
+                product.AddAction("AI clients...", delegate { AiClients.AiClientsForm.ShowWindow(false); });
+                product.AddAction("Verify", delegate { AiClients.AiClientsForm.ShowWindow(true); });
+
                 product.AddAction("Open the log folder", delegate
                 {
                     string folder = AB.RevitMcp.Contracts.Protocol.IpcConstants.LogDirectory;
@@ -137,6 +140,10 @@ namespace AB.RevitMcp.Addin
                     _service.Log.Info("Auto-start enabled; bridge started with Revit.",
                         J.O("pipeName", _service.PipeName));
                 }
+
+                // The AI clients ticked in the installer: configured now, once, off the UI thread.
+                try { AiClients.AiClientSetup.ApplyPendingInBackground(System.Windows.Threading.Dispatcher.CurrentDispatcher); }
+                catch (Exception ex) { _service.Log.Error("Applying the installer's AI client choice failed.", ex); }
             }
             catch (Exception ex)
             {

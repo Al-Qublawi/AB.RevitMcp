@@ -6,7 +6,7 @@
     Produces, from src\AB.RevitMcp.Addin\Resources\logo.png:
 
       logo_16.png / logo_32.png   ribbon images for the Revit add-in (WPF reads PNG directly)
-      logo.ico                    multi-size application icon for the installer executable
+      installer\product.ico       multi-size icon the .msi shows in Apps and Features
 
     The .ico is written by hand because System.Drawing's Icon.Save cannot produce a multi-size,
     32-bit-alpha icon - it downgrades to a single low-colour frame. The Vista+ ICO format simply
@@ -28,8 +28,8 @@ if (-not $Source) { $Source = Join-Path $repoRoot 'src\AB.RevitMcp.Addin\Resourc
 if (-not (Test-Path $Source)) { throw "Master logo not found: $Source" }
 
 $addinRes = Join-Path $repoRoot 'src\AB.RevitMcp.Addin\Resources'
-$setupRes = Join-Path $repoRoot 'installer\AB.RevitMcp.Setup\Resources'
-New-Item -ItemType Directory -Force -Path $addinRes, $setupRes | Out-Null
+$installerDir = Join-Path $repoRoot 'installer'
+New-Item -ItemType Directory -Force -Path $addinRes, $installerDir | Out-Null
 
 Write-Host ''
 Write-Host '  Generating icon assets' -ForegroundColor Cyan
@@ -75,12 +75,7 @@ try {
         Write-Host ("   [ok]   logo_{0}.png  ({1} bytes)" -f $size, $bytes.Length) -ForegroundColor Green
     }
 
-    # ---- installer banner ----
-    [byte[]] $bannerBytes = New-ScaledPngBytes -Image $master -Size 96
-    [System.IO.File]::WriteAllBytes((Join-Path $setupRes 'logo_96.png'), $bannerBytes)
-    Write-Host ("   [ok]   logo_96.png  ({0} bytes)" -f $bannerBytes.Length) -ForegroundColor Green
-
-    # ---- multi-size .ico for the setup executable ----
+    # ---- multi-size .ico for Apps and Features ----
     $iconSizes = 16, 24, 32, 48, 64, 128, 256
     $frames = @()
     foreach ($size in $iconSizes) { $frames += ,([byte[]] (New-ScaledPngBytes -Image $master -Size $size)) }
@@ -114,16 +109,16 @@ try {
         foreach ($frame in $frames) { $writer.Write([byte[]] $frame, 0, ([byte[]] $frame).Length) }
         $writer.Flush()
 
-        $icoPath = Join-Path $setupRes 'logo.ico'
+        $icoPath = Join-Path $installerDir 'product.ico'
         [System.IO.File]::WriteAllBytes($icoPath, $ico.ToArray())
 
         # Sanity-check: header alone is 6 + 16*frames bytes, so anything near that means the
         # frame payloads were silently dropped.
         $headerOnly = 6 + (16 * $iconSizes.Count)
         if ($ico.Length -le $headerOnly + 64) {
-            throw "logo.ico is only $($ico.Length) bytes - the frame data was not written."
+            throw "product.ico is only $($ico.Length) bytes - the frame data was not written."
         }
-        Write-Host ("   [ok]   logo.ico  ({0} frames, {1} KB)" -f $iconSizes.Count,
+        Write-Host ("   [ok]   product.ico  ({0} frames, {1} KB)" -f $iconSizes.Count,
                     [math]::Round($ico.Length / 1KB, 1)) -ForegroundColor Green
     }
     finally { $writer.Dispose(); $ico.Dispose() }

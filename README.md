@@ -45,7 +45,7 @@ safe. Nothing else in the add-in calls the Revit API off that thread.
 | `AB.RevitMcp.Addin` | `net48` + `net8.0-windows` | Revit add-in: ribbon, UI-thread dispatcher, transaction policy, 78 tool implementations. |
 | `AB.RevitMcp.Server` | `net8.0-windows` | Standalone MCP server: JSON-RPC over stdio or Streamable HTTP. |
 | `AB.RevitMcp.MockBridge` | `net8.0-windows` | Fake Revit bridge for testing a client configuration without opening Revit. |
-| `AB.RevitMcp.Setup` | `net48` | Single-file installer; every payload rides inside it as a resource. |
+| `installer\` | — | `RevitMcp.msi.psd1` + `RevitMcp.AiClients.wxs`: the `.msi`, built by the AB Adv Tools kit. No code runs inside it. |
 
 The tool catalogue lives in the **shared contracts assembly**, which is why the server can answer
 `tools/list` while Revit is closed, and why a schema and its implementation cannot drift apart —
@@ -87,43 +87,49 @@ The `.csproj` errors out with a clear message if you pair the wrong TFM with a r
 
 ### Option 1 — the installer (recommended, and what you copy to other machines)
 
-Download **`AB.RevitMcp.Setup.exe`** from the [latest release](../../releases/latest).
-Close Revit, then run it:
+Download **`AB.RevitMcp-<version>.msi`** from the [latest release](../../releases/latest)
+and double-click it.
 
-```
-AB.RevitMcp.Setup.exe
-```
+One Windows Installer package, about 33 MB, no prerequisites beyond .NET Framework 4.8 (which
+Revit itself requires). Everything is per user: no admin rights, no services. Its pages:
 
-One file, about 33 MB, no prerequisites beyond .NET Framework 4.8 (which Revit itself
-requires). It detects every Revit release on the machine, **finds any earlier copy of the
-bridge and offers to remove it first**, installs only the releases you tick, registers the
-server with your AI clients, and verifies the result. Everything is per user: no admin
-rights, no services. It appears in Apps and Features for a normal uninstall.
+- **Choose releases** — a tick per Revit release, ticked where that Revit is installed;
+  remembered for the next upgrade.
+- **AI clients** — the AI agents to point at the server (the ones found are ticked), plus an
+  optional **custom agent**: any MCP config file, JSON or YAML, with its own server-map key.
+- **Earlier versions** — a copy installed by 1.4.0's `AB.RevitMcp.Setup.exe` is removed first
+  unless you untick it.
 
-> **The published build is not code-signed.** On a managed machine, Windows Defender's
-> Attack Surface Reduction rule *"Block executable files from running unless they meet a
-> prevalence, age, or trusted list criterion"* will block it. See
-> [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the signing pipeline (`build\sign.ps1`) and for
-> what to give IT if you need it allowlisted instead.
+It appears in Apps and Features for uninstall and repair.
+
+**The AI clients are configured by Revit, the first time it starts after installing** — the
+package runs no code of its own (see below), so it only records the ticks. Revit then writes each
+client's config (backing it up first) and shows what it did. Restart the clients afterwards.
+**AI Clients** on the MCP Bridge panel does the same at any time: add a custom agent with a file
+browser, configure or remove the `revit` server, and **Verify** the whole chain.
+
+> **Why an .msi.** On company PCs, Windows Defender's Attack Surface Reduction rule *"Block
+> executable files from running unless they meet a prevalence, age, or trusted list criteria"*
+> blocks unknown executables — 1.4.0's unsigned `AB.RevitMcp.Setup.exe` among them. The rule does
+> not apply to Windows Installer packages, and this one contains no step that runs code (the build
+> checks). The server itself is started through `dotnet.exe` where .NET is installed, for the same
+> reason. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 For unattended IT deployment:
 
 ```
-AB.RevitMcp.Setup.exe /silent             :: every supported release, clients configured
-AB.RevitMcp.Setup.exe /silent /noclients  :: skip AI client registration
-AB.RevitMcp.Setup.exe /uninstall /silent  :: remove it again
-AB.RevitMcp.Setup.exe /scan               :: report what is installed, change nothing
+msiexec /i AB.RevitMcp-1.5.0.msi /qn               :: clients found are configured when Revit starts
+msiexec /i AB.RevitMcp-1.5.0.msi /qn NOCLIENTS=1   :: configure no AI client
+msiexec /i AB.RevitMcp-1.5.0.msi /qn REVIT2022=0   :: leave a release out (ALLRELEASES=1: every release)
+msiexec /i AB.RevitMcp-1.5.0.msi /l*v setup.log    :: with a log
+msiexec /x AB.RevitMcp-1.5.0.msi /qn               :: remove it again
 ```
 
-Silent runs print to the calling console and always write a log to
-`%TEMP%\ABRevitMcp-Setup-*.log`, as before (or `/log:<file>`).
+If Revit is open while installing, Windows lists it and asks you to close it, or to let the
+update finish at the next restart.
 
-In the window you can still tick which Revit releases and AI agents to configure, add a custom agent
-(any MCP config file, JSON or YAML, with its own server-map key), run **Verify** at any time without
-installing, and carry on with Revit open — a release Revit has locked is skipped and reported.
-
-The installer is built on the AB Adv Tools installer engine shared by every AB add-in
-(`shared\ABAdvTools`).
+The package is built by the AB Adv Tools kit shared by every AB add-in (`shared\ABAdvTools\msi`);
+`build\build-installer.ps1 -DryRun` shows what it would do on a machine without changing anything.
 
 ### Release notifications
 

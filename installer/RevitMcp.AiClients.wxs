@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  AB Revit MCP Bridge - the "AI clients" page of the .msi, and where its choices are kept.
+
+  The installer cannot write the clients' configuration files itself: that needs code, and an
+  .msi that runs code is exactly what company PCs with Defender's attack surface reduction rules
+  block. So this page only RECORDS the choice, in
+      HKCU\Software\AB Adv Tools\Installer\RevitMcp\AiClients
+  and the add-in applies it the first time Revit starts (Ui\AiClients\AiClientSetup.cs), with
+  the same configurator Setup.exe used. Everything else - custom clients picked with a file
+  browser, reconfiguring, removing, Verify - is on the AI Clients button in Revit.
+
+  The value names and client ids below are read by AiClientSetup.cs. Keep them in step.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Fragment>
+
+    <!-- ============================================================ detection: ticked when found -->
+    <Property Id="AB_AGENTDIR_CLAUDEDESKTOP"><DirectorySearch Id="SearchClaudeDesktop" Path="[AppDataFolder]Claude" Depth="0" AssignToProperty="yes" /></Property>
+    <Property Id="AB_AGENTDIR_CURSOR"><DirectorySearch Id="SearchCursor" Path="[%USERPROFILE]\.cursor" Depth="0" AssignToProperty="yes" /></Property>
+    <Property Id="AB_AGENTDIR_VSCODE"><DirectorySearch Id="SearchVsCode" Path="[AppDataFolder]Code\User" Depth="0" AssignToProperty="yes" /></Property>
+    <Property Id="AB_AGENTDIR_GEMINI"><DirectorySearch Id="SearchGemini" Path="[%USERPROFILE]\.gemini" Depth="0" AssignToProperty="yes" /></Property>
+    <Property Id="AB_AGENTDIR_VISUALSTUDIO"><DirectorySearch Id="SearchVisualStudio" Path="[LocalAppDataFolder]Microsoft\VisualStudio" Depth="0" AssignToProperty="yes" /></Property>
+    <Property Id="AB_AGENTDIR_WINDSURF"><DirectorySearch Id="SearchWindsurf" Path="[%USERPROFILE]\.codeium\windsurf" Depth="0" AssignToProperty="yes" /></Property>
+    <Property Id="AB_AGENTDIR_CLINE"><DirectorySearch Id="SearchCline" Path="[AppDataFolder]Code\User\globalStorage\saoudrizwan.claude-dev" Depth="0" AssignToProperty="yes" /></Property>
+    <Property Id="AB_AGENTDIR_ROOCODE"><DirectorySearch Id="SearchRooCode" Path="[AppDataFolder]Code\User\globalStorage\rooveterinaryinc.roo-cline" Depth="0" AssignToProperty="yes" /></Property>
+    <Property Id="AB_AGENTDIR_LMSTUDIO"><DirectorySearch Id="SearchLmStudio" Path="[%USERPROFILE]\.lmstudio" Depth="0" AssignToProperty="yes" /></Property>
+    <Property Id="AB_AGENTDIR_CONTINUE"><DirectorySearch Id="SearchContinue" Path="[%USERPROFILE]\.continue" Depth="0" AssignToProperty="yes" /></Property>
+    <Property Id="AB_AGENTDIR_OPENCLAW"><DirectorySearch Id="SearchOpenClaw" Path="[%USERPROFILE]\.openclaw" Depth="0" AssignToProperty="yes" /></Property>
+    <Property Id="AB_AGENTDIR_CLAUDECODE">
+      <DirectorySearch Id="SearchProfile" Path="[%USERPROFILE]" Depth="0">
+        <FileSearch Id="SearchClaudeCode" Name=".claude.json" />
+      </DirectorySearch>
+    </Property>
+
+    <!-- Each tick holds its client id plus ";" when ticked, so the list is simply their concatenation. -->
+    <Property Id="AGENT_CLAUDEDESKTOP" Secure="yes" />
+    <Property Id="AGENT_CURSOR" Secure="yes" />
+    <Property Id="AGENT_VSCODE" Secure="yes" />
+    <Property Id="AGENT_GEMINI" Secure="yes" />
+    <Property Id="AGENT_VISUALSTUDIO" Secure="yes" />
+    <Property Id="AGENT_WINDSURF" Secure="yes" />
+    <Property Id="AGENT_CLINE" Secure="yes" />
+    <Property Id="AGENT_ROOCODE" Secure="yes" />
+    <Property Id="AGENT_LMSTUDIO" Secure="yes" />
+    <Property Id="AGENT_CONTINUE" Secure="yes" />
+    <Property Id="AGENT_OPENCLAW" Secure="yes" />
+    <Property Id="AGENT_CLAUDECODE" Secure="yes" />
+    <Property Id="AB_CUSTOMAGENT_PATH" Secure="yes" />
+    <Property Id="AB_CUSTOMAGENT_KEY" Value="mcpServers" Secure="yes" />
+    <!-- NOCLIENTS=1: configure no client (Setup.exe's /noclients). -->
+    <Property Id="NOCLIENTS" Secure="yes" />
+
+    <!-- Defaults: every client found is ticked. In the UI always; in a silent install only. -->
+    <SetProperty Id="AGENT_CLAUDEDESKTOP" Action="AbAgentClaudeDesktop" Value="claude-desktop;" After="AbDefaultsEnd" Sequence="both" Condition="NOT AB_UIRAN AND NOT NOCLIENTS AND NOT AGENT_CLAUDEDESKTOP AND AB_AGENTDIR_CLAUDEDESKTOP" />
+    <SetProperty Id="AGENT_CURSOR" Action="AbAgentCursor" Value="cursor;" After="AbAgentClaudeDesktop" Sequence="both" Condition="NOT AB_UIRAN AND NOT NOCLIENTS AND NOT AGENT_CURSOR AND AB_AGENTDIR_CURSOR" />
+    <SetProperty Id="AGENT_VSCODE" Action="AbAgentVsCode" Value="vscode;" After="AbAgentCursor" Sequence="both" Condition="NOT AB_UIRAN AND NOT NOCLIENTS AND NOT AGENT_VSCODE AND AB_AGENTDIR_VSCODE" />
+    <SetProperty Id="AGENT_GEMINI" Action="AbAgentGemini" Value="gemini-cli;" After="AbAgentVsCode" Sequence="both" Condition="NOT AB_UIRAN AND NOT NOCLIENTS AND NOT AGENT_GEMINI AND AB_AGENTDIR_GEMINI" />
+    <SetProperty Id="AGENT_VISUALSTUDIO" Action="AbAgentVisualStudio" Value="visual-studio;" After="AbAgentGemini" Sequence="both" Condition="NOT AB_UIRAN AND NOT NOCLIENTS AND NOT AGENT_VISUALSTUDIO AND AB_AGENTDIR_VISUALSTUDIO" />
+    <SetProperty Id="AGENT_WINDSURF" Action="AbAgentWindsurf" Value="windsurf;" After="AbAgentVisualStudio" Sequence="both" Condition="NOT AB_UIRAN AND NOT NOCLIENTS AND NOT AGENT_WINDSURF AND AB_AGENTDIR_WINDSURF" />
+    <SetProperty Id="AGENT_CLINE" Action="AbAgentCline" Value="cline;" After="AbAgentWindsurf" Sequence="both" Condition="NOT AB_UIRAN AND NOT NOCLIENTS AND NOT AGENT_CLINE AND AB_AGENTDIR_CLINE" />
+    <SetProperty Id="AGENT_ROOCODE" Action="AbAgentRooCode" Value="roo-code;" After="AbAgentCline" Sequence="both" Condition="NOT AB_UIRAN AND NOT NOCLIENTS AND NOT AGENT_ROOCODE AND AB_AGENTDIR_ROOCODE" />
+    <SetProperty Id="AGENT_LMSTUDIO" Action="AbAgentLmStudio" Value="lm-studio;" After="AbAgentRooCode" Sequence="both" Condition="NOT AB_UIRAN AND NOT NOCLIENTS AND NOT AGENT_LMSTUDIO AND AB_AGENTDIR_LMSTUDIO" />
+    <SetProperty Id="AGENT_CONTINUE" Action="AbAgentContinue" Value="continue;" After="AbAgentLmStudio" Sequence="both" Condition="NOT AB_UIRAN AND NOT NOCLIENTS AND NOT AGENT_CONTINUE AND AB_AGENTDIR_CONTINUE" />
+    <SetProperty Id="AGENT_OPENCLAW" Action="AbAgentOpenClaw" Value="openclaw;" After="AbAgentContinue" Sequence="both" Condition="NOT AB_UIRAN AND NOT NOCLIENTS AND NOT AGENT_OPENCLAW AND AB_AGENTDIR_OPENCLAW" />
+    <SetProperty Id="AGENT_CLAUDECODE" Action="AbAgentClaudeCode" Value="claude-code;" After="AbAgentOpenClaw" Sequence="both" Condition="NOT AB_UIRAN AND NOT NOCLIENTS AND NOT AGENT_CLAUDECODE AND AB_AGENTDIR_CLAUDECODE" />
+
+    <!-- ============================================================ where the choice is kept -->
+    <ComponentGroup Id="AbAiClientChoices">
+      <Component Id="AbAiClientChoice" Directory="TARGETDIR" Guid="{5C0E2B7A-3F1D-4E8B-9A62-7D4B1C9E0F35}">
+        <RegistryKey Root="HKCU" Key="Software\AB Adv Tools\Installer\RevitMcp\AiClients">
+          <!-- A new token on every install or repair tells Revit there is a choice to apply. -->
+          <RegistryValue Name="Token" Value="[ProductCode] [ProductVersion] [Date] [Time]" Type="string" KeyPath="yes" />
+          <RegistryValue Name="Clients" Value="[AGENT_CLAUDEDESKTOP][AGENT_CURSOR][AGENT_VSCODE][AGENT_GEMINI][AGENT_VISUALSTUDIO][AGENT_WINDSURF][AGENT_CLINE][AGENT_ROOCODE][AGENT_LMSTUDIO][AGENT_CONTINUE][AGENT_OPENCLAW][AGENT_CLAUDECODE]" Type="string" />
+          <RegistryValue Name="CustomPath" Value="[AB_CUSTOMAGENT_PATH]" Type="string" />
+          <RegistryValue Name="CustomKey" Value="[AB_CUSTOMAGENT_KEY]" Type="string" />
+        </RegistryKey>
+      </Component>
+    </ComponentGroup>
+
+    <!-- ============================================================ the page -->
+    <UI>
+      <Dialog Id="ABAgentsDlg" Width="370" Height="270" Title="[ProductName] Setup">
+        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="WixUI_Bmp_Banner" />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="300" Height="15" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}AI clients" />
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="320" Height="15" Transparent="yes" NoPrefix="yes" Text="AI agents to configure automatically (existing configs are backed up):" />
+
+        <Control Id="ClaudeDesktop" Type="CheckBox" X="20" Y="50" Width="160" Height="12" CheckBoxValue="claude-desktop;" Property="AGENT_CLAUDEDESKTOP" Text="Claude Desktop" />
+        <Control Id="Cursor" Type="CheckBox" X="20" Y="63" Width="160" Height="12" CheckBoxValue="cursor;" Property="AGENT_CURSOR" Text="Cursor" />
+        <Control Id="VsCode" Type="CheckBox" X="20" Y="76" Width="160" Height="12" CheckBoxValue="vscode;" Property="AGENT_VSCODE" Text="VS Code / GitHub Copilot" />
+        <Control Id="Gemini" Type="CheckBox" X="20" Y="89" Width="160" Height="12" CheckBoxValue="gemini-cli;" Property="AGENT_GEMINI" Text="Gemini CLI" />
+        <Control Id="VisualStudio" Type="CheckBox" X="20" Y="102" Width="160" Height="12" CheckBoxValue="visual-studio;" Property="AGENT_VISUALSTUDIO" Text="Visual Studio 2022" />
+        <Control Id="Windsurf" Type="CheckBox" X="20" Y="115" Width="160" Height="12" CheckBoxValue="windsurf;" Property="AGENT_WINDSURF" Text="Windsurf" />
+        <Control Id="Cline" Type="CheckBox" X="190" Y="50" Width="160" Height="12" CheckBoxValue="cline;" Property="AGENT_CLINE" Text="Cline (VS Code extension)" />
+        <Control Id="RooCode" Type="CheckBox" X="190" Y="63" Width="160" Height="12" CheckBoxValue="roo-code;" Property="AGENT_ROOCODE" Text="Roo Code (VS Code extension)" />
+        <Control Id="LmStudio" Type="CheckBox" X="190" Y="76" Width="160" Height="12" CheckBoxValue="lm-studio;" Property="AGENT_LMSTUDIO" Text="LM Studio (local models)" />
+        <Control Id="Continue" Type="CheckBox" X="190" Y="89" Width="160" Height="12" CheckBoxValue="continue;" Property="AGENT_CONTINUE" Text="Continue" />
+        <Control Id="OpenClaw" Type="CheckBox" X="190" Y="102" Width="160" Height="12" CheckBoxValue="openclaw;" Property="AGENT_OPENCLAW" Text="OpenClaw" />
+        <Control Id="ClaudeCode" Type="CheckBox" X="190" Y="115" Width="160" Height="12" CheckBoxValue="claude-code;" Property="AGENT_CLAUDECODE" Text="Claude Code (shows the command)" />
+
+        <Control Id="CustomLabel" Type="Text" X="20" Y="134" Width="330" Height="10" NoPrefix="yes" Text="{\WixUI_Font_Emphasized}Custom agent (optional): its MCP configuration file" />
+        <Control Id="CustomPath" Type="Edit" X="20" Y="146" Width="330" Height="15" Property="AB_CUSTOMAGENT_PATH" Text="{260}" />
+        <Control Id="KeyLabel" Type="Text" X="20" Y="168" Width="125" Height="10" NoPrefix="yes" Text="Key holding its server list:" />
+        <Control Id="Key" Type="ComboBox" X="148" Y="166" Width="100" Height="15" Property="AB_CUSTOMAGENT_KEY" ComboList="no">
+          <ComboBox Property="AB_CUSTOMAGENT_KEY">
+            <ListItem Value="mcpServers" Text="mcpServers" />
+            <ListItem Value="servers" Text="servers" />
+            <ListItem Value="mcp.servers" Text="mcp.servers" />
+          </ComboBox>
+        </Control>
+        <Control Id="KeyHint" Type="Text" X="20" Y="184" Width="330" Height="20" NoPrefix="yes" Text="{\ABAdv_Font_Note}mcpServers for most clients, servers for VS Code and Visual Studio, a dotted path when nested (mcp.servers). A .yaml file is read as YAML." />
+        <Control Id="Applied" Type="Text" X="20" Y="208" Width="330" Height="22" NoPrefix="yes" Text="Revit applies these the first time it starts, then restart your AI clients. Change them any time with AI Clients on the MCP Bridge panel." />
+
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="&lt; &amp;Back" />
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="&amp;Next &gt;" />
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="Cancel">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+    </UI>
+
+  </Fragment>
+</Wix>

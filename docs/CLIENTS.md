@@ -124,16 +124,20 @@ the sane path: it supports stdio directly, so the model stays remote while the t
 
 ## Auto-configure
 
-The installer can write these files for you, backing up anything it touches
-(`<file>.abmcp-backup`):
+The bridge writes these files for you, backing up anything it touches (`<file>.abmcp-backup`):
 
-```powershell
-.\build\install.ps1 -ConfigureClients
-```
+- **When installing** — tick the clients on the installer's **AI clients** page (the ones found are
+  ticked), optionally with a custom agent's config file. Revit applies the choice the first time it
+  starts afterwards and shows what it did.
+- **Any time** — **AI Clients** on the MCP Bridge panel in Revit: configure or remove the `revit`
+  server for the ticked clients, add a custom agent (any JSON or YAML MCP config, with its own
+  server-map key), and **Verify** the chain.
+- **From source** — `.\build\install.ps1 -ConfigureClients`.
 
-It configures Claude Desktop, Cursor and VS Code. It deliberately does **not** edit Claude Code's
-`~/.claude.json`, because that file also holds live session state and a scripted rewrite risks
-clobbering it — run `claude mcp add revit "<path>"` instead.
+It configures Claude Desktop, Cursor, VS Code, Gemini CLI, Visual Studio, Windsurf, Cline, Roo Code,
+LM Studio, Continue and OpenClaw. It deliberately does **not** edit Claude Code's `~/.claude.json`,
+because that file also holds live session state and a scripted rewrite risks clobbering it — it
+shows the `claude mcp add revit -- …` command to run instead.
 
 ## Check it worked
 

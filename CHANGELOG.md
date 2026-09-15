@@ -3,6 +3,38 @@
 All notable changes to this project are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] — 2026-09-15
+
+### Changed
+- **The installer is an `.msi`: `AB.RevitMcp-1.5.0.msi`.** 1.4.0's unsigned `AB.RevitMcp.Setup.exe`
+  was blocked on managed PCs by Defender's attack surface reduction rule *"Block executable files
+  from running unless they meet a prevalence, age, or trusted list criteria"*. The package is built
+  by the AB Adv Tools kit 2.0 and contains no custom action that runs code, so that rule does not
+  apply to it. Kept from 1.4.0's installer: per user with no administrator rights, a tick per Revit
+  release (installed ones ticked), the AI agents list with detected agents ticked, a custom agent
+  (JSON or YAML config with its own server-map key), removal of an earlier copy first unless
+  unticked, Apps and Features, silent deployment (`msiexec /qn`, `NOCLIENTS=1` for `/noclients`).
+- **AI clients are configured by the add-in.** The installer records the ticked clients; Revit
+  applies them the first time it starts after installing (once per install, even with several Revit
+  releases starting together) and shows the result. The launch probe - `dotnet.exe
+  AB.RevitMcp.Server.dll` when .NET is installed - is unchanged.
+- **Copy config** writes the same dotnet launch form the configurator uses.
+
+### Added
+- **AI Clients** and **Verify** on the MCP Bridge panel (and in About): configure or remove the
+  `revit` server for the ticked clients, add a custom agent with a file browser, and run the server's
+  doctor at any time - what Setup.exe's window offered, now inside Revit. Verify pings the bridge too
+  when it is running.
+- Release ticks are remembered for the next upgrade.
+
+### Changed behaviour worth knowing
+- With Revit open, Windows lists it and asks you to close it, or finishes the update at the next
+  restart. Setup.exe skipped the locked releases instead.
+- Silent logs come from `msiexec /l*v <file>`; there is no `%TEMP%\ABRevitMcp-Setup-*.log` any more.
+
+### Removed
+- `installer\AB.RevitMcp.Setup` (the Setup.exe project); `AgentConfigurator` moved into the add-in.
+
 ## [1.4.0] — 2026-09-14
 
 ### Changed

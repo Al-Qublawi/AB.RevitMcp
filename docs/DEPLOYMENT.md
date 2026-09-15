@@ -2,29 +2,36 @@
 
 ## "Risky action blocked" / "Your administrator has blocked this action"
 
-If Defender blocks `AB.RevitMcp.Setup.exe` with:
+Up to 1.4.0 the bridge shipped as `AB.RevitMcp.Setup.exe`, and on managed machines Defender blocked
+it with:
 
 > **Blocked by:** Attack surface reduction
 > **Rule:** Block executable files from running unless they meet a prevalence, age, or trusted list criteria
 
-**this is not a malware detection.** Nothing was found in the file. It is an **Attack Surface
-Reduction (ASR) policy rule** — GUID `01443614-cd74-433a-b99e-2ecdc07bfc25` — which blocks *any*
-executable Microsoft has not seen widely enough, for long enough, or that is not on an allow list.
+**That is not a malware detection.** It is an **Attack Surface Reduction (ASR) policy rule** — GUID
+`01443614-cd74-433a-b99e-2ecdc07bfc25` — which blocks *any* executable Microsoft has not seen widely
+enough, for long enough, or that is not on an allow list. A freshly compiled, unsigned executable
+meets none of those criteria by definition.
 
-A freshly compiled, unsigned executable meets none of those criteria by definition. Your own build
-of any tool would be blocked identically on a machine with that rule enforced.
+**Since 1.5.0 the installer is `AB.RevitMcp-<version>.msi`.** The rule applies to executables; a
+Windows Installer package is opened by `msiexec.exe`, which Windows trusts. The package contains no
+custom action that runs code — `shared\ABAdvTools\msi\New-AdvToolsMsi.ps1` refuses to build one — so
+there is nothing inside it for the rule to act on either. That is also why the installer does not
+write the AI clients' configuration files itself: it records the choice, and the add-in applies it
+inside Revit, which the machine already trusts.
 
-Two things follow:
+Two places the rule can still matter:
 
-- **"Your administrator has blocked this action" means the machine is managed.** The rule came from
-  Intune or Group Policy. The person sitting at that machine cannot lift it, and should not try to —
-  the fix goes through whoever manages the fleet.
-- **Reputation is earned by the certificate, not the file.** Allowlisting one build's hash works
-  until you rebuild. Signing fixes it permanently.
+- **The MCP server your AI client starts** is an executable. The add-in configures clients to start
+  it as `dotnet.exe AB.RevitMcp.Server.dll` when .NET is installed (Microsoft-signed, so not blocked),
+  and falls back to the `.exe` otherwise. **AI Clients → Verify** in Revit shows which is in use.
+- **"Your administrator has blocked this action" means the machine is managed.** If a stricter policy
+  (WDAC, AppLocker) blocks the package or the add-in itself, the fix goes through whoever manages the
+  fleet — the person at that machine cannot lift it and should not try.
 
 ---
 
-## Fix 1 — sign the build (the real fix)
+## Signing (optional, and still worth it)
 
 Once you have a code-signing certificate, signing is one flag:
 
@@ -37,47 +44,32 @@ $pw = Read-Host -AsSecureString "PFX password"
 .\build\build-installer.ps1 -CertPfx .\mycert.pfx -CertPassword $pw
 ```
 
-This signs **both** the installer and the binaries inside it — the add-in DLLs Revit loads and the
-MCP server executable your AI client launches. Signing only the installer would leave everything it
-drops behind unsigned, which is the mistake that makes people think signing "didn't work".
+This signs the add-in DLLs Revit loads, the MCP server executable, and the `.msi`. A signature gives IT
+one publisher to allow for every future build, instead of a hash per build, and lets the server `.exe`
+run on machines without .NET.
 
 Everything is SHA-256 and **timestamped**, so signatures stay valid after the certificate expires.
 
-### Which certificate
-
 | Type | Cost/yr | ASR / SmartScreen behaviour |
 | --- | --- | --- |
-| **OV** (standard) | ~$200–400 | Valid signature immediately, but **no reputation on day one** — ASR may still block early builds until downloads accumulate |
+| **OV** (standard) | ~$200–400 | Valid signature immediately, but **no reputation on day one** |
 | **EV** (extended validation) | ~$400–700 | **Immediate SmartScreen reputation.** Ships on a hardware token / cloud HSM |
 | Self-signed | free | Useless here — not trusted by anything outside machines you install the root on |
 
-For distributing to colleagues on managed corporate machines, **EV is the one that actually solves
-this on day one**. OV plus an IT allowlist (below) also works and is cheaper.
-
 ---
 
-## Fix 2 — ask IT to allow it
+## If IT asks for details
 
-Every build writes `dist\AB.RevitMcp.Setup.allowlist.txt` containing exactly what an administrator
-needs: publisher, version, size, SHA-256, and signature status.
-
-Send that file to IT and ask for **one** of these, best first:
-
-1. **Allow by publisher certificate** — survives every future build. Only possible once signed.
-2. **ASR exclusion for the installer path or hash** — Defender for Endpoint → ASR rule exclusions,
-   or Intune → Endpoint security → Attack surface reduction.
-3. **WDAC / AppLocker publisher rule**, if the estate uses those instead.
-
-An administrator can also verify the file themselves:
+Every build writes `dist\AB.RevitMcp.allowlist.txt`: publisher, version, size, SHA-256 and signature
+status of the `.msi`. An administrator can also check the file themselves:
 
 ```powershell
-Get-FileHash .\AB.RevitMcp.Setup.exe -Algorithm SHA256
-Get-AuthenticodeSignature .\AB.RevitMcp.Setup.exe | Format-List
+Get-FileHash .\AB.RevitMcp-1.5.0.msi -Algorithm SHA256
+Get-AuthenticodeSignature .\AB.RevitMcp-1.5.0.msi | Format-List
 ```
 
 > Do not ask users to turn ASR off, run as administrator, or "just allow it once" on a managed
-> device. That rule exists because unsigned executables from a Downloads folder are exactly how
-> most endpoint compromises start — the honest answer is to sign the software.
+> device.
 
 ---
 
@@ -96,24 +88,23 @@ Copying over a network share or USB usually avoids it entirely.
 
 ---
 
-## Deployment options that avoid the problem
+## Rolling it out
 
-**Internal file share instead of Downloads.** ASR's prevalence rule is aimed at the browser-download
-path. A signed build on a share that IT already trusts is the normal enterprise route.
-
-**Silent install from a managed script.** Once IT has allowed the publisher, roll it out with:
+Per user, so run it as the user (a login script, Intune "user" context, or by hand):
 
 ```
-AB.RevitMcp.Setup.exe /silent
-AB.RevitMcp.Setup.exe /silent /noagents    :: skip AI client registration
+msiexec /i AB.RevitMcp-1.5.0.msi /qn                 :: AI clients found are configured when Revit starts
+msiexec /i AB.RevitMcp-1.5.0.msi /qn NOCLIENTS=1     :: configure no AI client
+msiexec /i AB.RevitMcp-1.5.0.msi /qn ALLRELEASES=1   :: every Revit release, installed or not
+msiexec /i AB.RevitMcp-1.5.0.msi /l*v setup.log      :: with a log
+msiexec /x AB.RevitMcp-1.5.0.msi /qn                 :: uninstall
 ```
 
-Exit code `0` = success, `1` = problems. A log is always written to
-`%TEMP%\ABRevitMcp-Setup-*.log`.
+Standard Windows Installer exit codes: `0` success, `3010` success but a restart finishes it (Revit
+was open), `1602` cancelled, `1603` failed — see the log.
 
 **Build on the target machine.** With the .NET SDK and Revit installed, `INSTALL.bat` compiles
-locally — locally compiled binaries in a user profile are not subject to the download-prevalence
-rule. Practical for a handful of BIM workstations, not for a fleet.
+locally. Practical for a handful of BIM workstations, not for a fleet.
 
 ---
 
@@ -121,13 +112,16 @@ rule. Practical for a handful of BIM workstations, not for a fleet.
 
 Worth having ready when IT asks:
 
-- **Per-user only.** No admin rights, no `Program Files`, no registry, no services, no scheduled
-  tasks. Everything lives in `%APPDATA%\Autodesk\Revit\Addins` and `%LOCALAPPDATA%\ABRevitMcp`.
+- **Per-user only.** No admin rights, no `Program Files`, no services, no scheduled tasks. Files live
+  in `%APPDATA%\Autodesk\Revit\Addins` and `%LOCALAPPDATA%\ABRevitMcp`; the installer keeps its own
+  state under `HKCU\Software\AB Adv Tools\Installer\RevitMcp`.
+- **The installer runs no code.** Windows Installer tables only — no DLL, EXE or script custom actions.
 - **No network access.** The bridge is a **named pipe**, restricted by ACL to the current Windows
   user. Nothing is sent off the machine. The optional HTTP transport is off by default, binds
-  loopback only, and validates `Origin`.
+  loopback only, and validates `Origin`. The only outbound request is the once-a-day anonymous check
+  for a newer GitHub release, which can be switched off.
 - **No telemetry.** Logs are local newline-delimited JSON.
-- **The AI does not run code.** Tools are 70 fixed, schema-validated operations. The one arbitrary
+- **The AI does not run code.** Tools are fixed, schema-validated operations. The one arbitrary
   code path (`revit_execute_code`) is disabled by default behind **three** independent gates: a
   server flag, a Revit-side setting, and a per-call confirmation.
 - **Destructive operations require explicit confirmation** and most support a dry run that reports

@@ -22,8 +22,8 @@
     ALWAYS timestamps: without a timestamp the signature dies when the certificate expires.
 
 .EXAMPLE
-    .\sign.ps1 -Files .\dist\AB.RevitMcp.Setup.exe -Thumbprint A1B2C3...
-    .\sign.ps1 -Files .\dist\AB.RevitMcp.Setup.exe -PfxPath cert.pfx -PfxPassword (Read-Host -AsSecureString)
+    .\sign.ps1 -Files .\dist\AB.RevitMcp-1.5.0.msi -Thumbprint A1B2C3...
+    .\sign.ps1 -Files .\dist\AB.RevitMcp-1.5.0.msi -PfxPath cert.pfx -PfxPassword (Read-Host -AsSecureString)
 #>
 [CmdletBinding()]
 param(

@@ -97,15 +97,15 @@ ASR rule GUID: 01443614-cd74-433a-b99e-2ecdc07bfc25
 This is a **policy rule, not a malware detection**. A freshly built, unsigned executable fails all
 three tests by definition, and on a managed device the end user cannot lift it.
 
-**The fix, and what the installer now does automatically.** The server publish ships the managed
+**The fix, and what the add-in does automatically.** The server publish ships the managed
 `AB.RevitMcp.Server.dll` beside its apphost `.exe`, so the identical program can be started
 through `dotnet.exe` instead. The process Windows is asked to create is then `dotnet.exe` -
 Microsoft-signed, about as prevalent as software gets - and the rule has nothing to act on. The
 `.dll` is *loaded*, not executed as a process. Nothing is disabled or bypassed: same code, same
 user, same permissions.
 
-Setup detects this and registers your clients in that form when .NET is present. To fix an
-existing install by hand, change the entry from:
+The add-in detects this and registers your clients in that form when .NET is present - both when
+it applies the installer's choice and from **AI Clients**. To fix an entry by hand, change it from:
 
 ```json
 { "command": "C:\Users\you\AppData\Local\ABRevitMcp\Server\AB.RevitMcp.Server.exe",
@@ -122,10 +122,11 @@ to:
 then restart the client **completely** (Claude Desktop: quit from the tray icon, not just the
 window). Confirm .NET is present with `dotnet --info`.
 
-If the *installer itself* is blocked, that is the same rule applied to `AB.RevitMcp.Setup.exe`.
-Give your IT administrator `dist\AB.RevitMcp.Setup.allowlist.txt`, which carries the publisher,
-version and SHA256 needed to allowlist it. The durable fix is code signing - see
-[DEPLOYMENT.md](DEPLOYMENT.md).
+**AI Clients → Verify** on the MCP Bridge panel shows how the server is being started and runs the
+doctor the same way; **Configure ticked** rewrites the entries in the dotnet form.
+
+If an *installer* was blocked, it was 1.4.0's `AB.RevitMcp.Setup.exe`: since 1.5.0 the installer is an
+`.msi`, which that rule does not apply to. See [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## The ribbon tab does not appear
 

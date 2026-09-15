@@ -5,7 +5,7 @@ using System.IO;
 using System.Text;
 using AB.RevitMcp.Contracts.Json;
 
-namespace AB.RevitMcp.Setup
+namespace AB.RevitMcp.Addin.AiClients
 {
     /// <summary>
     /// How an MCP client should start the server: a command plus arguments.
@@ -85,7 +85,7 @@ namespace AB.RevitMcp.Setup
             if (dotnet == null)
             {
                 log("  launch: .NET is not installed - using the executable directly");
-                log("          (if Defender blocks it, install the .NET runtime and re-run this setup)");
+                log("          (if Defender blocks it, install the .NET runtime and configure the clients again)");
                 return Direct(serverExe);
             }
 
@@ -178,6 +178,11 @@ namespace AB.RevitMcp.Setup
     /// <summary>One AI client that can be pointed at the Revit MCP server.</summary>
     public sealed class AgentTarget
     {
+        /// <summary>
+        /// Stable id, e.g. "claude-desktop". The .msi records the user's ticks as these ids
+        /// (installer\RevitMcp.AiClients.wxs): never rename one.
+        /// </summary>
+        public string Id;
         public string Name;
         public string ConfigPath;
         /// <summary>
@@ -189,6 +194,7 @@ namespace AB.RevitMcp.Setup
         public AgentFormat Format = AgentFormat.Json;
         public string DetectFolder;
         public string Hint;
+        public string RemoveHint;
 
         public bool Detected
         {
@@ -201,19 +207,27 @@ namespace AB.RevitMcp.Setup
 
         public override string ToString()
         {
-            return Detected ? Name : Name + "  (not installed)";
+            if (!Detected) return Name + "  (not installed)";
+            return AgentConfigurator.IsConfigured(this) ? Name + "  (configured)" : Name;
         }
     }
 
     /// <summary>
-    /// Registers the MCP server with whichever AI clients are on the machine.
+    /// Registers the MCP server with whichever AI clients are on the machine - and removes it again.
     ///
     /// Every write preserves the rest of the file and leaves a .abmcp-backup beside it. MCP client
     /// configs hold other servers and, in some cases, unrelated application settings - clobbering
     /// one would be a far worse outcome than simply not configuring it.
+    ///
+    /// Until 1.5.0 this ran inside AB.RevitMcp.Setup.exe. The installer is now an .msi, which must
+    /// not run code (company PCs block unknown executables), so the add-in runs it instead: the
+    /// choice made in the installer is applied when Revit starts (AiClientSetup), and the AI Clients
+    /// button does the rest.
     /// </summary>
     public sealed class AgentConfigurator
     {
+        public const string ServerName = "revit";
+
         private readonly Action<string> _log;
 
         public AgentConfigurator(Action<string> log)
@@ -231,6 +245,7 @@ namespace AB.RevitMcp.Setup
             {
                 new AgentTarget
                 {
+                    Id = "claude-desktop",
                     Name = "Claude Desktop",
                     DetectFolder = Path.Combine(appData, "Claude"),
                     ConfigPath = Path.Combine(appData, "Claude", "claude_desktop_config.json"),
@@ -238,6 +253,7 @@ namespace AB.RevitMcp.Setup
                 },
                 new AgentTarget
                 {
+                    Id = "cursor",
                     Name = "Cursor",
                     DetectFolder = Path.Combine(userProfile, ".cursor"),
                     ConfigPath = Path.Combine(userProfile, ".cursor", "mcp.json"),
@@ -246,6 +262,7 @@ namespace AB.RevitMcp.Setup
                 new AgentTarget
                 {
                     // VS Code is the odd one out: it keys servers under "servers", not "mcpServers".
+                    Id = "vscode",
                     Name = "VS Code / GitHub Copilot (agent mode)",
                     DetectFolder = Path.Combine(appData, "Code", "User"),
                     ConfigPath = Path.Combine(appData, "Code", "User", "mcp.json"),
@@ -254,6 +271,7 @@ namespace AB.RevitMcp.Setup
                 new AgentTarget
                 {
                     // Gemini CLI speaks MCP; the Gemini web app and mobile app do not.
+                    Id = "gemini-cli",
                     Name = "Gemini CLI",
                     DetectFolder = Path.Combine(userProfile, ".gemini"),
                     ConfigPath = Path.Combine(userProfile, ".gemini", "settings.json"),
@@ -261,6 +279,7 @@ namespace AB.RevitMcp.Setup
                 },
                 new AgentTarget
                 {
+                    Id = "visual-studio",
                     Name = "Visual Studio 2022",
                     DetectFolder = VisualStudioMcpFolder(localAppData),
                     ConfigPath = VisualStudioMcpFolder(localAppData) == null
@@ -270,6 +289,7 @@ namespace AB.RevitMcp.Setup
                 },
                 new AgentTarget
                 {
+                    Id = "windsurf",
                     Name = "Windsurf",
                     DetectFolder = Path.Combine(userProfile, ".codeium", "windsurf"),
                     ConfigPath = Path.Combine(userProfile, ".codeium", "windsurf", "mcp_config.json"),
@@ -277,6 +297,7 @@ namespace AB.RevitMcp.Setup
                 },
                 new AgentTarget
                 {
+                    Id = "cline",
                     Name = "Cline (VS Code extension)",
                     DetectFolder = Path.Combine(appData, "Code", "User", "globalStorage", "saoudrizwan.claude-dev"),
                     ConfigPath = Path.Combine(appData, "Code", "User", "globalStorage",
@@ -285,6 +306,7 @@ namespace AB.RevitMcp.Setup
                 },
                 new AgentTarget
                 {
+                    Id = "roo-code",
                     Name = "Roo Code (VS Code extension)",
                     DetectFolder = Path.Combine(appData, "Code", "User", "globalStorage", "rooveterinaryinc.roo-cline"),
                     ConfigPath = Path.Combine(appData, "Code", "User", "globalStorage",
@@ -293,6 +315,7 @@ namespace AB.RevitMcp.Setup
                 },
                 new AgentTarget
                 {
+                    Id = "lm-studio",
                     Name = "LM Studio (local models)",
                     DetectFolder = Path.Combine(userProfile, ".lmstudio"),
                     ConfigPath = Path.Combine(userProfile, ".lmstudio", "mcp.json"),
@@ -300,6 +323,7 @@ namespace AB.RevitMcp.Setup
                 },
                 new AgentTarget
                 {
+                    Id = "continue",
                     Name = "Continue",
                     DetectFolder = Path.Combine(userProfile, ".continue"),
                     ConfigPath = Path.Combine(userProfile, ".continue", "config.yaml"),
@@ -308,6 +332,7 @@ namespace AB.RevitMcp.Setup
                 new AgentTarget
                 {
                     // Nested key: OpenClaw reads mcp.servers, not a top-level mcpServers.
+                    Id = "openclaw",
                     Name = "OpenClaw",
                     DetectFolder = Path.Combine(userProfile, ".openclaw"),
                     ConfigPath = Path.Combine(userProfile, ".openclaw", "openclaw.json"),
@@ -317,10 +342,13 @@ namespace AB.RevitMcp.Setup
                 {
                     // ~/.claude.json also stores live session state; a scripted rewrite there is
                     // not worth the risk, so the supported command is shown instead.
+                    Id = "claude-code",
                     Name = "Claude Code",
                     DetectFolder = Path.Combine(userProfile, ".claude.json"),
+                    ConfigPath = Path.Combine(userProfile, ".claude.json"),
                     Format = AgentFormat.CommandOnly,
-                    Hint = "claude mcp add revit \"{SERVER}\""
+                    Hint = "claude mcp add revit -- {SERVER}",
+                    RemoveHint = "claude mcp remove revit"
                 }
             };
         }
@@ -355,12 +383,42 @@ namespace AB.RevitMcp.Setup
         {
             return new AgentTarget
             {
+                Id = "custom",
                 Name = "Custom - " + Path.GetFileName(configPath),
                 ConfigPath = configPath,
                 DetectFolder = Path.GetDirectoryName(configPath),
                 RootKey = string.IsNullOrEmpty(rootKey) ? "mcpServers" : rootKey,
                 Format = yaml ? AgentFormat.Yaml : AgentFormat.Json
             };
+        }
+
+        public static bool IsYamlPath(string path)
+        {
+            return !string.IsNullOrEmpty(path) &&
+                   (path.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase) ||
+                    path.EndsWith(".yml", StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>Whether the client's config already holds a "revit" server. Never throws.</summary>
+        public static bool IsConfigured(AgentTarget agent)
+        {
+            try
+            {
+                if (agent == null || string.IsNullOrEmpty(agent.ConfigPath) || !File.Exists(agent.ConfigPath)) return false;
+                string text = File.ReadAllText(agent.ConfigPath);
+
+                if (agent.Format == AgentFormat.Yaml)
+                    return text.IndexOf("name: " + ServerName, StringComparison.OrdinalIgnoreCase) >= 0;
+
+                JsonValue document;
+                if (!JsonValue.TryParse(text, out document) || !document.IsObject) return false;
+                JsonValue container = FindContainer(document, agent.Format == AgentFormat.CommandOnly ? "mcpServers" : agent.RootKey);
+                return container != null && container.Has(ServerName);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
         }
 
         public int Configure(IEnumerable<AgentTarget> agents, string serverExe)
@@ -400,6 +458,65 @@ namespace AB.RevitMcp.Setup
             }
 
             return configured;
+        }
+
+        /// <summary>Takes the "revit" server out of each client's config, keeping a backup.</summary>
+        public int Remove(IEnumerable<AgentTarget> agents)
+        {
+            int removed = 0;
+
+            foreach (AgentTarget agent in agents)
+            {
+                try
+                {
+                    if (agent.Format == AgentFormat.CommandOnly)
+                    {
+                        _log(agent.Name + ": run  " + (agent.RemoveHint ?? "(remove the \"revit\" server in the client)"));
+                        continue;
+                    }
+
+                    if (string.IsNullOrEmpty(agent.ConfigPath) || !File.Exists(agent.ConfigPath))
+                    {
+                        _log(agent.Name + ": no configuration file - nothing to remove");
+                        continue;
+                    }
+
+                    if (agent.Format == AgentFormat.Yaml)
+                    {
+                        // Same reasoning as ConfigureYaml: no naive rewrites of someone's YAML.
+                        _log(agent.Name + (IsConfigured(agent)
+                            ? ": remove the \"- name: revit\" entry from " + agent.ConfigPath + " by hand"
+                            : ": not configured - nothing to remove"));
+                        continue;
+                    }
+
+                    JsonValue document;
+                    if (!JsonValue.TryParse(File.ReadAllText(agent.ConfigPath), out document) || !document.IsObject)
+                    {
+                        _log(agent.Name + ": config is not valid JSON - left untouched");
+                        continue;
+                    }
+
+                    JsonValue container = FindContainer(document, agent.RootKey);
+                    if (container == null || !container.Has(ServerName))
+                    {
+                        _log(agent.Name + ": not configured - nothing to remove");
+                        continue;
+                    }
+
+                    File.Copy(agent.ConfigPath, agent.ConfigPath + ".abmcp-backup", true);
+                    container.Remove(ServerName);
+                    File.WriteAllText(agent.ConfigPath, document.ToJson(true), new UTF8Encoding(false));
+                    _log(agent.Name + ": removed");
+                    removed++;
+                }
+                catch (Exception ex)
+                {
+                    _log(agent.Name + ": FAILED - " + ex.Message);
+                }
+            }
+
+            return removed;
         }
 
         private bool ConfigureJson(AgentTarget agent, LaunchSpec spec)
@@ -446,7 +563,7 @@ namespace AB.RevitMcp.Setup
             JsonValue entry = JsonValue.NewObject();
             entry.Set("command", spec.Command);
             entry.Set("args", spec.ArgsJson());
-            servers.Set("revit", entry);
+            servers.Set(ServerName, entry);
 
             File.WriteAllText(agent.ConfigPath, document.ToJson(true), new UTF8Encoding(false));
             _log(agent.Name + ": configured");
@@ -477,6 +594,20 @@ namespace AB.RevitMcp.Setup
                 current = child;
             }
 
+            return current;
+        }
+
+        /// <summary>Like ResolveContainer, but never creates anything: null when the path is absent.</summary>
+        private static JsonValue FindContainer(JsonValue document, string rootKey)
+        {
+            JsonValue current = document;
+            foreach (string segment in (rootKey ?? "mcpServers").Split('.'))
+            {
+                if (string.IsNullOrEmpty(segment)) continue;
+                JsonValue child = current[segment];
+                if (child == null || !child.IsObject) return null;
+                current = child;
+            }
             return current;
         }
 

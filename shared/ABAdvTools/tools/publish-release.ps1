@@ -16,7 +16,7 @@
     visibility, yourself.
 
 .EXAMPLE
-    .\tools\publish-release.ps1 -Repository ..\ABClashApprover -Asset ..\ABClashApprover\deploy\AB.ClashApprover.Setup.exe -NotesFile ..\ABClashApprover\RELEASE_NOTES.md
+    .\tools\publish-release.ps1 -Repository ..\ABClashApprover -Asset ..\ABClashApprover\deploy\AB.ClashApprover-1.4.1.msi -NotesFile ..\ABClashApprover\RELEASE_NOTES.md
 #>
 [CmdletBinding()]
 param(
@@ -59,7 +59,21 @@ try {
     if (-not $onRemote) { Die "Commit $($head.Substring(0, 8)) is not on GitHub yet. Push it first." }
     Ok "commit $($head.Substring(0, 8)) is pushed"
 
-    $version = (Get-Item $Asset).VersionInfo.ProductVersion
+    if ($Asset -like '*.msi') {
+        # The package's own ProductVersion, straight from its Property table.
+        $installer = New-Object -ComObject WindowsInstaller.Installer
+        $db = $installer.GetType().InvokeMember('OpenDatabase', 'InvokeMethod', $null, $installer, @([string]::Copy($Asset), 0))
+        $view = $db.GetType().InvokeMember('OpenView', 'InvokeMethod', $null, $db, @("SELECT ``Value`` FROM ``Property`` WHERE ``Property``='ProductVersion'"))
+        $view.GetType().InvokeMember('Execute', 'InvokeMethod', $null, $view, $null) | Out-Null
+        $record = $view.GetType().InvokeMember('Fetch', 'InvokeMethod', $null, $view, $null)
+        $version = $record.GetType().InvokeMember('StringData', 'GetProperty', $null, $record, @(1))
+        $view.GetType().InvokeMember('Close', 'InvokeMethod', $null, $view, $null) | Out-Null
+        [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($view) | Out-Null
+        [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($db) | Out-Null
+    }
+    else {
+        $version = (Get-Item $Asset).VersionInfo.ProductVersion
+    }
     if ($version -match '^(\d+\.\d+\.\d+)') { $version = $Matches[1] } else { Die "Cannot read a version from $Asset." }
     $tag = "v$version"
     Ok "installer version $version -> tag $tag"

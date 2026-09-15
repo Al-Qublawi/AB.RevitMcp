@@ -21,7 +21,7 @@ namespace ABAdvTools
     internal static class AdvToolsBrand
     {
         /// <summary>Bumped whenever the kit changes; shown in the About dialog.</summary>
-        public const string KitVersion = "1.1.0";
+        public const string KitVersion = "2.0.0";
 
         public const string SuiteName = "AB Adv Tools";
 

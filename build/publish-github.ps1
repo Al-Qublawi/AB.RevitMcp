@@ -4,7 +4,7 @@
 
 .DESCRIPTION
     One-shot publish. Creates the GitHub repository, pushes main, then creates the release
-    and uploads dist\AB.RevitMcp.Setup.exe to it.
+    and uploads dist\AB.RevitMcp-<version>.msi to it.
 
     Requires the GitHub CLI, authenticated. If gh is missing this script installs it via
     winget; authentication is interactive and must be done by you:
@@ -21,7 +21,8 @@ param(
 
     # Defaults to v<Version> from Directory.Build.props - a hard-coded default went stale once.
     [string] $Tag,
-    [string] $Asset    = 'dist\AB.RevitMcp.Setup.exe',
+    # Defaults to dist\AB.RevitMcp-<Version>.msi.
+    [string] $Asset,
 
     # Publish private instead of public. Default is public, as intended for this project.
     [switch] $Private
@@ -31,6 +32,7 @@ if (-not $Tag) {
     $props = Join-Path (Split-Path -Parent $PSScriptRoot) 'Directory.Build.props'
     $Tag = 'v' + (([xml](Get-Content $props)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1)
 }
+if (-not $Asset) { $Asset = 'dist\AB.RevitMcp-' + $Tag.TrimStart('v') + '.msi' }
 
 # ---------------------------------------------------------------------------
 # NOT 'Stop'. Windows PowerShell 5.1 wraps a native executable's stderr in a
@@ -153,7 +155,7 @@ if ($rel.ExitCode -eq 0) {
     $up = Invoke-Gh @('release', 'upload', $Tag, $Asset, '--repo', $slug, '--clobber')
     if ($up.ExitCode -ne 0) { Die "asset upload failed:`n$($up.Output)" }
 } else {
-    Write-Host '   uploading installer, this takes a moment (33 MB)...'
+    Write-Host '   uploading the installer, this takes a moment...'
     $mk = Invoke-Gh @('release', 'create', $Tag, $Asset, '--repo', $slug,
                       '--title', "AB Revit MCP Bridge $Tag", '--notes-file', $notes)
     if ($mk.ExitCode -ne 0) { Die "release failed:`n$($mk.Output)" }

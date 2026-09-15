@@ -6,11 +6,10 @@ obj/
 [Bb]uild/[Bb]in/
 *.pdb
 
-# ---- installer staging -------------------------------------------------
-# build-installer.ps1 regenerates both of these; the payload zips alone are
-# ~32 MB and would otherwise land in every clone.
-installer/AB.RevitMcp.Setup/payload/
-installer/AB.RevitMcp.Setup/lib/
+# ---- installer ---------------------------------------------------------
+# build-installer.ps1 stages the package under obj\msi and writes the .msi to dist\.
+*.msi
+*.wixpdb
 *.allowlist.txt
 
 # ---- code signing ------------------------------------------------------

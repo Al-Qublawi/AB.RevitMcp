@@ -1,13 +1,13 @@
 <#
 .SYNOPSIS
-    Turns a product logo PNG into a multi-size .ico for a setup executable.
+    Turns a product logo PNG into a multi-size .ico - the icon an add-in's .msi shows in Apps and Features.
 
 .DESCRIPTION
     Writes 16, 24, 32, 48 and 256 px frames, each PNG-compressed (supported since Windows
-    Vista), so the installer looks sharp in Explorer, the taskbar and Apps and Features.
+    Vista), so the icon looks sharp in Apps and Features at any scaling.
 
 .EXAMPLE
-    .\tools\make-setup-icon.ps1 -Png ..\ABClashApprover\src\ABClashApprover\Images\logo.png -Ico ..\ABClashApprover\installer\ABClashApprover.Setup\setup.ico
+    .\tools\make-product-icon.ps1 -Png ..\ABClashApprover\src\ABClashApprover\Images\logo.png -Ico ..\ABClashApprover\installer\product.ico
 #>
 [CmdletBinding()]
 param(

@@ -106,8 +106,13 @@ namespace AB.RevitMcp.Addin.Tools
             router.Register("revit_remove_links", DestructiveTools.RemoveLinks);
             router.Register("revit_delete_views", DestructiveTools.DeleteViews);
 
+            // ---------------- DEVELOPMENT TESTING & LONG RUNS ----------------
+            router.Register("revit_list_open_documents", DevTestTools.ListOpenDocuments);
+            router.Register("revit_get_job_result", DevTestTools.GetJobResult);
+
             // ---------------- ESCAPE HATCH (triple-gated) ----------------
             router.Register("revit_execute_code", CodeTools.ExecuteCode);
+            router.Register("revit_run_assembly_method", DevTestTools.RunAssemblyMethod);
         }
     }
 }

@@ -206,13 +206,15 @@ namespace AB.RevitMcp.Server.Doctor
                     }
                     if (!expectNetFramework && facts.IsNetFramework)
                     {
-                        Fail("    " + name + " is a .NET Framework build but Revit " + version + " needs .NET 8",
-                             "Rebuild with -f net8.0-windows -p:RevitVersion=" + version + ".");
+                        Fail("    " + name + " is a .NET Framework build but Revit " + version + " needs .NET " +
+                             (revitYear >= 2027 ? "10" : "8"),
+                             "Rebuild with -f " + (revitYear >= 2027 ? "net10.0-windows" : "net8.0-windows") +
+                             " -p:RevitVersion=" + version + ".");
                         closureOk = false;
                     }
                 }
 
-                if (closureOk) Pass("    dependency closure is correct for " + (expectNetFramework ? "net48" : ".NET 8"));
+                if (closureOk) Pass("    dependency closure is correct for " + (expectNetFramework ? "net48" : revitYear >= 2027 ? ".NET 10" : ".NET 8"));
 
                 // ---- is this Revit release actually installed? ----
                 string apiDll = Path.Combine(revitRoot, "Revit " + version, "RevitAPI.dll");

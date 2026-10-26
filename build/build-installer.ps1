@@ -25,7 +25,7 @@ param(
     [ValidateSet('Debug', 'Release')]
     [string] $Configuration = 'Release',
 
-    [int[]] $Versions = @(2020, 2021, 2022, 2023, 2024, 2025, 2026),
+    [int[]] $Versions = @(2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027),
 
     [string] $RevitProgramRoot = 'C:\Program Files\Autodesk',
 

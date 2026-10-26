@@ -5,10 +5,11 @@
 
     Project / target framework matrix
     ================================
-      AB.RevitMcp.Contracts  netstandard2.0        (loaded by .NET Framework 4.8 AND .NET 8)
+      AB.RevitMcp.Contracts  net48;netstandard2.0;net8.0-windows
       AB.RevitMcp.Ipc        net48;net8.0-windows  (needs framework-specific pipe security APIs)
-      AB.RevitMcp.Addin      net48;net8.0-windows  (net48 -> Revit 2020-2024, net8 -> Revit 2025+)
-      AB.RevitMcp.Server     net8.0-windows        (standalone MCP process)
+      AB.RevitMcp.Addin      net48;net8.0-windows;net10.0-windows
+                             (net48 -> Revit 2020-2024, net8 -> 2025-2026, net10 -> 2027)
+      AB.RevitMcp.Server     net8.0-windows        (standalone MCP process; compiles snippets for 2025+)
   -->
 
   <PropertyGroup>
@@ -20,9 +21,9 @@
     <Company>Abdullah Lotfy</Company>
     <Authors>Abdullah Lotfy</Authors>
     <Product>AB Revit MCP Bridge</Product>
-    <Version>1.5.0</Version>
-    <FileVersion>1.5.0.0</FileVersion>
-    <AssemblyVersion>1.5.0.0</AssemblyVersion>
+    <Version>1.6.0</Version>
+    <FileVersion>1.6.0.0</FileVersion>
+    <AssemblyVersion>1.6.0.0</AssemblyVersion>
     <Copyright>Copyright (c) Abdullah Lotfy</Copyright>
     <PackageProjectUrl>https://www.linkedin.com/in/abdullahalqublawi/</PackageProjectUrl>
     <NoWarn>$(NoWarn);CS1591;NU1701;MSB3277;CA1416</NoWarn>

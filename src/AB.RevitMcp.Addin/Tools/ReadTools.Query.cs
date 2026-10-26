@@ -433,6 +433,10 @@ namespace AB.RevitMcp.Addin.Tools
 
             JsonValue status = service.StatusJson();
 
+            // This tool runs on the UI thread itself, so "busyWith" would only ever name this call.
+            if (status["busyWith"].IsObject && status["busyWith"]["jobId"].AsString(null) == ctx.RequestId)
+                status.Set("busyWith", JsonValue.Null);
+
             Document doc = ctx.TryGetDoc();
             status.Set("activeDocument", doc != null ? doc.Title : null);
             status.Set("documentIsReadOnly", J.Wrap(doc != null ? (object)doc.IsReadOnly : null));

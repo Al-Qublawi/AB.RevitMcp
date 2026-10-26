@@ -121,9 +121,12 @@ Worth having ready when IT asks:
   loopback only, and validates `Origin`. The only outbound request is the once-a-day anonymous check
   for a newer GitHub release, which can be switched off.
 - **No telemetry.** Logs are local newline-delimited JSON.
-- **The AI does not run code.** Tools are fixed, schema-validated operations. The one arbitrary
-  code path (`revit_execute_code`) is disabled by default behind **three** independent gates: a
-  server flag, a Revit-side setting, and a per-call confirmation.
+- **The AI does not run code unless a human opens three gates.** Tools are fixed, schema-validated
+  operations. The two arbitrary code paths (`revit_execute_code` for C# snippets,
+  `revit_run_assembly_method` for a method of a DLL on disk) are disabled by default behind **three**
+  independent gates: a server flag (`--allow-code-execution`), a Revit-side switch that lasts one
+  Revit session only, and a per-call confirmation. For Revit 2025+ the MCP server compiles snippets
+  with Roslyn in its own process; no compiler is loaded into Revit.
 - **Destructive operations require explicit confirmation** and most support a dry run that reports
   the blast radius and rolls back.
 - **Fully open source** — the whole thing can be read and rebuilt from source.

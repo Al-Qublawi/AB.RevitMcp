@@ -24,6 +24,7 @@ namespace AB.RevitMcp.Addin.Bridge
             Args = args ?? JsonValue.NewObject();
             RequestId = requestId;
             Log = log;
+            Payload = JsonValue.Null;
         }
 
         public UIApplication UiApp { get; private set; }
@@ -31,6 +32,12 @@ namespace AB.RevitMcp.Addin.Bridge
         public JsonValue Args { get; private set; }
         public string RequestId { get; private set; }
         public RequestLog Log { get; private set; }
+
+        /// <summary>
+        /// Data the MCP server sent beside the arguments (outside the schema) - the assembly it
+        /// compiled for revit_execute_code on Revit 2025+. JsonValue.Null when there is none.
+        /// </summary>
+        public JsonValue Payload { get; internal set; }
 
         /// <summary>Set by a handler running in dryRun mode so the router rolls back instead of committing.</summary>
         public bool RollbackRequested { get; private set; }

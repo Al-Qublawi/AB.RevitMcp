@@ -1,4 +1,4 @@
-﻿# Revit MCP tool reference
+# Revit MCP tool reference
 
 Generated from the shared tool catalogue by `AB.RevitMcp.Server.exe --print-tools`.
 
@@ -8,10 +8,10 @@ decimal feet never cross this boundary.
 
 | Category | Count | Transaction | Confirmation |
 | --- | ---: | --- | --- |
-| Read | 24 | none | not required |
+| Read | 26 | none | not required |
 | Write | 48 | one transaction group per call | not required |
-| Destructive | 6 | one transaction group per call | `confirm: true` required |
-| **Total** | **78** | | |
+| Destructive | 7 | one transaction group per call | `confirm: true` required |
+| **Total** | **81** | | |
 
 ## Read tools
 
@@ -248,6 +248,21 @@ Returns the centre of the active view (or a named view) in project coordinates, 
 Lists the project's phases in sequence, with the id and name of each. Call this before revit_set_element_phase to get exact names.
 
 Takes no arguments.
+
+### `revit_list_open_documents`
+
+Lists every document open in this Revit session - the visible ones AND those opened in the background by a script - with title, path, which one is active, whether it has a window open, and its linked / family / workshared / modified / read-only state. Use it to find background test documents, and to make sure a test never touches the model the human is working in.
+
+Takes no arguments.
+
+### `revit_get_job_result`
+
+Any call that is still running when its wait runs out answers with state "running" and a jobId instead of a timeout - the work carries on inside Revit. Call this with that jobId to see whether it has finished and to collect its result. Answered without waiting for Revit, so it works while the job is busy. Do NOT repeat the original call while it is running: that would run it twice.
+
+| Argument | Type | Required | Description |
+| --- | --- | --- | --- |
+| `jobId` | string | yes | The jobId a previous call returned. |
+| `waitSeconds` | integer | no | Wait up to this long for the job to finish before answering. Default 0 (answer at once). (default `0`) |
 
 ## Write tools
 
@@ -867,7 +882,7 @@ Deletes views and their sheet placements. Views that are the last plan of a leve
 
 ### `revit_execute_code`
 
-Compiles and runs C# against the open model, for anything the other tools do not cover. Your code is the BODY of a method with `UIApplication uiApp` and `Document doc` in scope; return any value and it comes back as JSON. A transaction is already open, so do not start one. This is disabled by default and must be enabled in three separate places - if it is refused, prefer an existing tool rather than asking the human to unlock it. Requires Revit 2020-2024 (.NET Framework); Revit 2025+ has no in-box C# compiler.
+Compiles and runs C# against the open Revit session, for anything the other tools do not cover. Your code is the BODY of a method with `UIApplication uiApp` and `Document doc` (the active document) in scope; return any value and it comes back as JSON, a long string in full to a file. With transaction "active" (the default) a transaction is already open on the active document, so do not start one there. With transaction "none" nothing is opened, `doc` may be null, and the code starts its own transactions - use that to open, change, save and close BACKGROUND documents without touching the active one. A run longer than waitSeconds answers with a jobId (see revit_get_job_result). Revit 2020-2024 compile inside Revit (C# 5); Revit 2025 and newer are compiled by this MCP server (C# 13). Disabled by default behind three gates - if it is refused, prefer an existing tool rather than asking the human to unlock it.
 
 | Argument | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -875,5 +890,62 @@ Compiles and runs C# against the open model, for anything the other tools do not
 | `confirm` | boolean | yes | Must be exactly true. Safety interlock for a destructive operation - ask the human before setting it. (default `false`) |
 | `description` | string | no | One line saying what this code does, recorded in the log so a human can audit what ran. |
 | `usings` | string[] | no | Extra namespaces to import beyond the Revit and System defaults. |
+| `transaction` | `active` \| `none` | no | "active": run inside one undoable transaction on the active document (default). "none": open nothing; the code manages its own transactions and documents. (default `active`) |
+| `waitSeconds` | integer | no | How long to wait for the result before answering with a jobId instead. Default: the server's request budget (30 s unless --timeout raised it). The work is never cut short by this. |
+| `maxInlineChars` | integer | no | A returned string longer than this is written in full to a file under %LOCALAPPDATA%\ABRevitMcp\results and shortened inline (its start and end). Default 20000. (default `20000`) |
+
+### `revit_run_assembly_method`
+
+Development testing: loads a compiled .NET assembly from its bytes (the file is not locked) and calls one public static method, passing Revit objects and plain values - e.g. an add-in's DevHarness.RunAll(Document source, Document destination). Other DLLs in the same folder are loaded on demand as its dependencies. Revit never unloads an assembly: the same bytes are reused, but a REBUILT file that kept its assembly version is refused - give each dev build a new version. Documents are picked by title prefix and the ACTIVE document is refused unless allowActiveDocument is true. No transaction is opened; the method manages its own. A string result comes back in full (long text to a file); a run longer than waitSeconds answers with a jobId. Same three gates as revit_execute_code. The method can do anything the Revit API allows.
+
+| Argument | Type | Required | Description |
+| --- | --- | --- | --- |
+| `assemblyPath` | string | yes | Full path of the .dll; environment variables are expanded, e.g. %LOCALAPPDATA%\\Temp\\ABTransferDev\\v3\\AB.TransferAny.Addin.dll. |
+| `typeName` | string | yes | Full name of the type, e.g. AB.TransferAny.Addin.Diagnostics.DevHarness. |
+| `methodName` | string | yes | Name of the public static method, e.g. RunAll. |
+| `arguments` | object[] | no | The method's arguments, in order. Omit for a method without parameters. |
+| `allowActiveDocument` | boolean | no | Allow a document argument to be the document active in the Revit window. Default false - tests run on background copies. (default `false`) |
+| `confirm` | boolean | yes | Must be exactly true. Safety interlock for a destructive operation - ask the human before setting it. (default `false`) |
+| `description` | string | no | One line saying what this run is, recorded in the log. |
+| `waitSeconds` | integer | no | How long to wait for the result before answering with a jobId instead. Default: the server's request budget (30 s unless --timeout raised it). The work is never cut short by this. |
+| `maxInlineChars` | integer | no | A returned string longer than this is written in full to a file under %LOCALAPPDATA%\ABRevitMcp\results and shortened inline (its start and end). Default 20000. (default `20000`) |
+
+## Code execution and development testing
+
+`revit_execute_code` (C# snippets) and `revit_run_assembly_method` (a static method of a DLL, e.g. an add-in's `DevHarness`) can do anything the Revit API allows. Both sit behind the same three gates, and a refusal always names the closed gate and shows the state of all three.
+
+| Gate | Where | Default | Open | Close |
+| --- | --- | --- | --- | --- |
+| 1 | MCP server | off | add `--allow-code-execution` to the server's `args` (or `AB_REVITMCP_ALLOW_CODE=1` in its `env`), then restart or reconnect the server | take it out again, restart or reconnect |
+| 2 | Revit | off at every Revit start | AB Adv Tools > MCP Bridge > **Code exec: off** > Yes | press it again, or close Revit |
+| 3 | each call | - | `"confirm": true`, after the human approved that run | - |
+
+### A test session, on and off
+
+1. In the AI client's config, give the `revit` server `"args": ["--allow-code-execution"]` and reconnect it (Claude Code: `/mcp`, or a new session).
+2. In Revit: **Start Bridge**, then **Code exec**.
+3. Run the tests. `revit_bridge_status` shows all gates: `mcpServer.gate1AllowCodeExecution` and `codeExecution.gate2RevitSwitch`.
+4. Afterwards remove the flag again and reconnect. Gate 2 switches itself off when Revit closes.
+
+### What runs where
+
+- **Compiling.** Revit 2020-2024 compile snippets inside Revit with the in-box compiler (C# 5). Revit 2025 and newer have no compiler; the MCP server compiles the snippet with Roslyn (C# 13) against the running Revit's own framework and API assemblies and sends the finished assembly. No compiler is ever loaded into Revit.
+- **Transactions.** `revit_execute_code` with `"transaction": "active"` (default) runs inside one transaction on the active document: one undo step, rolled back on any error. With `"none"` nothing is opened and `doc` may be null - the code opens, changes, saves and closes BACKGROUND documents with transactions of its own. `revit_run_assembly_method` never opens a transaction.
+- **Long runs.** A call still running when its wait (`waitSeconds`, default 30 s) runs out answers `"state": "running"` with a `jobId`; the work carries on. Collect it with `revit_get_job_result` (answered even while Revit is busy; `waitSeconds` lets it wait). Never repeat the original call. This applies to every tool, not only these two.
+- **Long text.** A returned string over `maxInlineChars` (20000) is written in full to `%LOCALAPPDATA%\ABRevitMcp\results` and shortened inline to its start and end.
+- **Dev builds.** `revit_run_assembly_method` loads the DLL from its bytes (with its .pdb), reuses identical bytes, and refuses a rebuilt DLL that kept its version - Revit never unloads an assembly, so each dev build needs a new version. DLLs beside it load on demand. Documents are picked by title prefix; the active document is refused unless `allowActiveDocument` is true. `revit_list_open_documents` shows which documents are background copies (`openWindows: 0`).
+
+### Example: an add-in's test harness on background copies
+
+```json
+{ "name": "revit_run_assembly_method", "arguments": {
+    "assemblyPath": "%LOCALAPPDATA%\\Temp\\ABTransferDev\\v5\\AB.TransferAny.Addin.dll",
+    "typeName": "AB.TransferAny.Addin.Diagnostics.DevHarness",
+    "methodName": "RunAll",
+    "arguments": [ { "document": "ABTA_Source" }, { "document": "ABTA_Dest" } ],
+    "waitSeconds": 30, "confirm": true } }
+```
+
+The background copies themselves are made with `revit_execute_code` and `"transaction": "none"` (open a copy of a sample with `OpenDocumentFile`, create one with `NewProjectDocument`, `SaveAs`).
 
 

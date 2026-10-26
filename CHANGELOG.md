@@ -3,6 +3,45 @@
 All notable changes to this project are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] — unreleased
+
+Runs the AB add-ins' development test harnesses through AB MCP alone, on Revit 2020-2027. Until now
+that needed the third-party mcp-servers-for-revit bridge: `revit_execute_code` refused every Revit
+2025+ release, and long runs lost their results. **81 tools** (26 read / 48 write / 7 destructive).
+
+### Added
+- **`revit_execute_code` on Revit 2025, 2026 and 2027.** Those releases have no C# compiler, so the
+  MCP server now compiles the snippet itself with Roslyn 4.14 (C# 13), against the framework and
+  Revit API assemblies of the running Revit, and sends the finished assembly. No compiler is loaded
+  into Revit, where other add-ins already bring their own. Revit 2020-2024 compile in Revit as before.
+- **`transaction` argument for `revit_execute_code`.** `"active"` (default) is the behaviour so far:
+  one transaction on the active document, one undo step. `"none"` opens nothing, so code can open,
+  change, save and close background documents with transactions of its own.
+- **`revit_run_assembly_method`** - loads a DLL from its bytes and calls a public static method with
+  documents (picked by title prefix; the active document is refused unless allowed), the
+  UIApplication / Application and plain values. Reuses identical bytes, refuses a rebuilt DLL that
+  kept its version, loads sibling DLLs on demand, loads the .pdb for line numbers. `assemblyPath` and
+  `path` arguments expand `%LOCALAPPDATA%`, so recipe files hold no user-profile path. Same three gates.
+- **`revit_list_open_documents`** - every open document, including background ones, with which is
+  active and how many windows each has.
+- **Jobs for every tool.** A call still running when its wait runs out answers `"state": "running"`
+  with a `jobId` instead of a `TIMEOUT` that discarded the result; **`revit_get_job_result`** collects
+  it, and answers even while Revit is busy. The code tools take `waitSeconds`.
+- **Long text results** over `maxInlineChars` (20000) are written in full to
+  `%LOCALAPPDATA%\ABRevitMcp\results` and shortened inline.
+- **Revit 2027** (`net10.0-windows`, pinned API package 2027.2.0) in the build, installer and doctor.
+  Built and checked; not yet run in a live Revit 2027.
+- `revit_bridge_status` reports all three gates, what Revit is busy with, and running jobs.
+- The mock bridge answers `bridge/compile-context` and reports a received compiled assembly.
+
+### Changed
+- **The ribbon's Code exec switch lasts one Revit session.** It used to stay on in `settings.json`
+  across restarts; an ON stored by an earlier version is cleared at startup.
+- **Refusals name the closed gate** and show the state of all three, with one line on opening it.
+- A `TIMEOUT` for work that never started says what Revit was busy with. Starting and abandoning a
+  queued call can no longer race (it could be reported "not run" and then run).
+- The README's safety model no longer claims there is no code-execution tool.
+
 ## [1.5.0] — 2026-09-15
 
 ### Changed

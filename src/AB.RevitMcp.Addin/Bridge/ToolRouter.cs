@@ -38,13 +38,20 @@ namespace AB.RevitMcp.Addin.Bridge
         ///                         a read-only model
         ///   revit_unload_links  - RevitLinkType.Unload manages its own document state and the
         ///                         Revit API refuses to run it inside transaction control
-        /// Both still go through the full validation and confirmation policy.
+        ///   revit_execute_code  - opens the transaction group itself for transaction:"active"
+        ///                         (the default, same as before 1.6.0) and none at all for
+        ///                         transaction:"none", which background-document tests need
+        ///   revit_run_assembly_method - never wrapped: a test harness opens, changes and closes
+        ///                         background documents with transactions of its own
+        /// All still go through the full validation and confirmation policy.
         /// </summary>
         private static readonly HashSet<string> NoTransactionTools =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 "revit_set_selection",
-                "revit_unload_links"
+                "revit_unload_links",
+                ToolCatalog.ExecuteCodeToolName,
+                ToolCatalog.RunAssemblyMethodToolName
             };
 
         public ToolRouter(RequestLog log)
@@ -113,9 +120,25 @@ namespace AB.RevitMcp.Addin.Bridge
             }
 
             var context = new ToolContext(uiApp, descriptor, request.Arguments, request.Id, _log);
+            context.Payload = request.Payload ?? JsonValue.Null;
 
             try
             {
+                // ---- 3a. the code tools' gates 2 and 3, reported together ----
+                if (CodeGates.IsCodeTool(descriptor.Name))
+                {
+                    bool gate2 = Tools.CodeTools.IsEnabled();
+                    bool gate3 = request.Arguments["confirm"].IsBool && request.Arguments["confirm"].AsBool(false);
+                    if (!gate2 || !gate3)
+                    {
+                        // Gate 1 is the MCP server's own flag; this call only got here through it.
+                        throw new ToolException(BridgeErrorCodes.GateClosed,
+                            CodeGates.Refusal(descriptor.Name, !gate2 ? 2 : 3,
+                                CodeGates.State.Open, CodeGates.From(gate2), CodeGates.From(gate3)),
+                            J.O("gate", !gate2 ? 2 : 3, "tool", descriptor.Name));
+                    }
+                }
+
                 // ---- 3. destructive interlock ----
                 if (descriptor.IsDestructive)
                 {
@@ -176,7 +199,7 @@ namespace AB.RevitMcp.Addin.Bridge
         /// assimilated so the user sees ONE undo entry named after the tool; on any failure - or
         /// when the handler asked for a dry run - the group is rolled back in full.
         /// </summary>
-        private static JsonValue RunTransacted(ToolContext context, ToolDescriptor descriptor, ToolHandler handler)
+        internal static JsonValue RunTransacted(ToolContext context, ToolDescriptor descriptor, ToolHandler handler)
         {
             Document doc = context.Doc;
 

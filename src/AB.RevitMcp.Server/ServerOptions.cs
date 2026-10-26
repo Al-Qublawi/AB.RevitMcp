@@ -22,7 +22,7 @@ namespace AB.RevitMcp.Server
         public string PrintConfigClient;
         public bool RunDoctor;
         public bool AllowDestructive = true;
-        /// <summary>Gate 1 of 3 for revit_execute_code. Off unless explicitly requested.</summary>
+        /// <summary>Gate 1 of 3 for the code tools (revit_execute_code, revit_run_assembly_method). Off unless requested.</summary>
         public bool AllowCodeExecution;
 
         public static ServerOptions Parse(string[] args, out string error)
@@ -179,7 +179,7 @@ namespace AB.RevitMcp.Server
         {
             var lines = new List<string>
             {
-                "AB Revit MCP Server - Model Context Protocol bridge for Autodesk Revit 2020-2026",
+                "AB Revit MCP Server - Model Context Protocol bridge for Autodesk Revit 2020-2027",
                 "",
                 "USAGE",
                 "  AB.RevitMcp.Server.exe [options]",
@@ -200,9 +200,11 @@ namespace AB.RevitMcp.Server
                     "s - and this flag only ever raises it.",
                 "",
                 "SAFETY",
-                "  --allow-code-execution  Expose revit_execute_code, which compiles and runs",
-                "                          arbitrary C# against the model. Off by default; the Revit",
-                "                          add-in must ALSO enable it, and every call needs confirm.",
+                "  --allow-code-execution  Expose revit_execute_code (compiles and runs arbitrary C#)",
+                "                          and revit_run_assembly_method (runs a method of a DLL).",
+                "                          Gate 1 of 3, off by default: Code exec must ALSO be on in",
+                "                          Revit (this session only), and every call needs confirm.",
+                "                          Remove it again after a test session.",
                 "  --read-only             Refuse every write and destructive tool. They are still",
                 "                          advertised, but calling one returns an error.",
                 "",
@@ -219,6 +221,7 @@ namespace AB.RevitMcp.Server
                 "  " + IpcConstants.RevitVersionEnvVar + "   same as --revit-version",
                 "  " + IpcConstants.TimeoutEnvVar + "     same as --timeout",
                 "  AB_REVITMCP_READONLY       set to 1 for --read-only",
+                "  AB_REVITMCP_ALLOW_CODE     set to 1 for --allow-code-execution",
                 "",
                 "NOTES",
                 "  stdout carries the MCP protocol and nothing else. All logging goes to stderr.",

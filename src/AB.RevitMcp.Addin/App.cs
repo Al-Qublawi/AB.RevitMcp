@@ -75,7 +75,7 @@ namespace AB.RevitMcp.Addin
                 {
                     BridgeService service = BridgeService.Current;
                     string nl = Environment.NewLine;
-                    return "A universal Model Context Protocol bridge for Autodesk Revit 2020-2026. Any MCP-compatible " +
+                    return "A universal Model Context Protocol bridge for Autodesk Revit 2020-2027. Any MCP-compatible " +
                            "AI client - Claude, Cursor, VS Code, DeepSeek, a local model - can query and edit the open " +
                            "Revit model through " + AB.RevitMcp.Contracts.Tools.ToolCatalog.Count + " tools." + nl +
                            (service != null ? "Revit " + service.RevitVersion + "   |   " : string.Empty) +

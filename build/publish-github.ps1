@@ -127,7 +127,7 @@ if ($look.ExitCode -eq 0) {
     if ($LASTEXITCODE -ne 0) { Die 'push failed' }
 } else {
     Write-Host '   repository does not exist yet - creating it'
-    $desc = 'Universal MCP server + Revit add-in: let any MCP-compatible AI client safely query, create and modify Autodesk Revit models. Revit 2020-2026, 78 tools, metric.'
+    $desc = 'Universal MCP server + Revit add-in: let any MCP-compatible AI client safely query, create and modify Autodesk Revit models. Revit 2020-2027, 81 tools, metric.'
     $create = Invoke-Gh @('repo', 'create', $RepoName, $visibility, '--source=.', '--remote=origin', '--push', '--description', $desc)
     if ($create.ExitCode -ne 0) { Die "repo create failed:`n$($create.Output)" }
 }

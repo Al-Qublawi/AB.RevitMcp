@@ -282,8 +282,12 @@ namespace AB.RevitMcp.Addin.Ui
                         "model. There is no schema validation and no limit on what the code can do - " +
                         "it can delete, overwrite or corrupt anything the Revit API can reach." +
                         Environment.NewLine + Environment.NewLine +
+                        "The same switch also allows revit_run_assembly_method, which runs a method " +
+                        "of a DLL on disk (development test harnesses)." +
+                        Environment.NewLine + Environment.NewLine +
                         "Every other tool here is bounded and validated. Only enable this if you " +
-                        "genuinely need something none of them cover, and turn it off afterwards." +
+                        "genuinely need something none of them cover. It stays on only until this " +
+                        "Revit closes." +
                         Environment.NewLine + Environment.NewLine +
                         "The MCP server must ALSO be started with --allow-code-execution, and every " +
                         "call still needs an explicit confirmation.";
@@ -305,8 +309,10 @@ namespace AB.RevitMcp.Addin.Ui
 
                 TaskDialog.Show(Branding.ProductName,
                     enabling
-                        ? "Code execution is ON for this machine. Turn it off when you are done."
-                        : "Code execution is OFF. revit_execute_code will refuse every call.");
+                        ? "Code execution is ON for this Revit session. It switches itself off when " +
+                          "Revit closes, or press the button again to turn it off now."
+                        : "Code execution is OFF. revit_execute_code and revit_run_assembly_method will " +
+                          "refuse every call.");
                 return Result.Succeeded;
             }
         }

@@ -84,10 +84,12 @@ namespace AB.RevitMcp.Addin.Ui
             var codeExecData = new PushButtonData(
                 "ABMcpCodeExec", "Code exec: off", assemblyPath,
                 typeof(Commands.ToggleCodeExecutionCommand).FullName);
-            codeExecData.ToolTip = "Allow a connected AI to compile and run arbitrary Revit API C#.";
+            codeExecData.ToolTip = "Allow a connected AI to compile and run arbitrary Revit API C#, " +
+                                   "or a method of a DLL (test harnesses) - for this Revit session only.";
             codeExecData.LongDescription =
-                "OFF by default, and deliberately hard to turn on: the MCP server must also be " +
-                "started with --allow-code-execution, and every call needs an explicit confirmation.";
+                "OFF by default and off again when Revit closes. Deliberately hard to use: the MCP " +
+                "server must also be started with --allow-code-execution, and every call needs an " +
+                "explicit confirmation.";
             codeExecData.Image = IconFactory.Badge(16, IconFactory.Disconnected);
 
             System.Collections.Generic.IList<RibbonItem> stacked =

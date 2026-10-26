@@ -123,6 +123,43 @@ namespace AB.RevitMcp.MockBridge
                         "requestsServed", Interlocked.Read(ref _requests),
                         "toolsInCatalog", ToolCatalog.Count), 1);
 
+                case IpcConstants.OpCompileContext:
+                    {
+                        // Like a Revit 2025+ bridge: the server compiles. Gate 2 follows
+                        // AB_MOCK_CODE_EXEC=1 so the server's gate handling can be tried without Revit.
+                        // The snippet is compiled against this mock's own runtime; it is never run.
+                        string coreDir = System.IO.Path.GetDirectoryName(typeof(object).Assembly.Location);
+                        string revitApi = Environment.GetEnvironmentVariable("AB_MOCK_REVITAPI_DIR");
+                        var files = new System.Collections.Generic.List<string>();
+                        if (!string.IsNullOrEmpty(revitApi))
+                        {
+                            files.Add(System.IO.Path.Combine(revitApi, "RevitAPI.dll"));
+                            files.Add(System.IO.Path.Combine(revitApi, "RevitAPIUI.dll"));
+                        }
+                        return BridgeResponse.Success(request.Id, J.O(
+                            "addinVersion", "mock",
+                            "revitRelease", "mock",
+                            "compileMode", "server",
+                            "runtime", System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription,
+                            "codeExecutionAllowed", Environment.GetEnvironmentVariable("AB_MOCK_CODE_EXEC") == "1",
+                            "referenceDirectories", J.AStrings(new[] { coreDir }),
+                            "referenceFiles", J.AStrings(files)), 1);
+                    }
+
+                case ToolCatalog.ExecuteCodeToolName:
+                    {
+                        // Never runs anything: reports what the server sent, which proves the
+                        // server-side compile reached the bridge.
+                        string assembly = request.Payload["assembly"].AsString(null);
+                        return BridgeResponse.Success(request.Id, J.O(
+                            "executed", false,
+                            "mock", true,
+                            "compiledAssemblyBytes", assembly != null ? Convert.FromBase64String(assembly).Length : 0,
+                            "sha256", request.Payload["sha256"].AsString(null),
+                            "compiler", request.Payload["compiler"].AsString(null),
+                            "note", "The mock bridge never runs code."), 1);
+                    }
+
                 case "revit_get_model_info":
                     return BridgeResponse.Success(request.Id, J.O(
                         "title", "MockProject.rvt",

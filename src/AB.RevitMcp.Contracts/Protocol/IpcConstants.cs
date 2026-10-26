@@ -63,6 +63,21 @@ namespace AB.RevitMcp.Contracts.Protocol
         public const string OpDescribe = "bridge/describe";
         public const string OpStatus = "bridge/status";
 
+        /// <summary>
+        /// Asks the bridge what the MCP server needs to compile a revit_execute_code snippet for it:
+        /// whether it compiles in-process (Revit 2020-2024) or expects a compiled assembly
+        /// (Revit 2025+), the reference assemblies of the running Revit, and the state of the
+        /// ribbon gate. Answered off the UI thread. Added in 1.6.0; an older add-in answers
+        /// UNKNOWN_TOOL.
+        /// </summary>
+        public const string OpCompileContext = "bridge/compile-context";
+
+        /// <summary>How many long-running jobs the bridge remembers for revit_get_job_result.</summary>
+        public const int MaxJobs = 50;
+
+        /// <summary>Text longer than this is written in full to <see cref="ResultsDirectory"/> and shortened inline.</summary>
+        public const int DefaultInlineTextChars = 20000;
+
         public static string BuildPipeName(string revitVersion, int processId)
         {
             return PipeNamePrefix + "." + (string.IsNullOrEmpty(revitVersion) ? "0000" : revitVersion) + "." + processId;
@@ -84,5 +99,8 @@ namespace AB.RevitMcp.Contracts.Protocol
 
         /// <summary>Directory holding newline-delimited JSON logs.</summary>
         public static string LogDirectory { get { return Path.Combine(DataRoot, "logs"); } }
+
+        /// <summary>Directory holding the full text of results too long to return inline.</summary>
+        public static string ResultsDirectory { get { return Path.Combine(DataRoot, "results"); } }
     }
 }

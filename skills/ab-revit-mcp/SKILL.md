@@ -10,7 +10,7 @@ You are operating a **live Revit model that a human is working in**. Every write
 real project. Treat it the way a BIM coordinator treats someone else's model: look first, change
 narrowly, verify what you did, and say plainly what happened.
 
-The bridge exposes 78 tools over three safety groups: **24 read**, **48 write**, **6 destructive**.
+The bridge exposes 81 tools over three safety groups: **26 read**, **48 write**, **7 destructive**.
 All values in and out are metric — millimetres, m², m³, degrees. Revit's internal decimal feet
 never cross this boundary; never convert units yourself.
 
@@ -31,7 +31,8 @@ A single failed call is not evidence the bridge is down. The common causes, in o
 | "tool not found" | Your client's tool list is older than the add-in. Restart the client. |
 | No bridge at all | Revit is open but **Start Bridge** was never pressed, or no model is open. |
 | `spawn EPERM` at startup | Defender blocked the server process — a client-side install problem, not the model. |
-| One tool times out | That operation is genuinely slow (export gets 5 minutes; most tools get 30 s). |
+| A call answers `"state": "running"` with a `jobId` | It is still running inside Revit and will finish. Collect it with `revit_get_job_result`; **never repeat the call** - it would run twice. |
+| `TIMEOUT` ... "was not run" | Revit was busy (the message says with what) and the call never started. Retry when Revit is free. |
 
 Never tell the user their installation is fundamentally broken on the strength of one error.
 Diagnose, then report what you actually verified.
@@ -51,7 +52,7 @@ Only then create. Errors suggest close matches — read them rather than retryin
 ### 3. Destructive means destructive
 
 `revit_delete_elements` · `revit_delete_views` · `revit_purge_unused` · `revit_unload_links` ·
-`revit_remove_links` · `revit_execute_code`
+`revit_remove_links` · `revit_execute_code` · `revit_run_assembly_method`
 
 These do nothing without `"confirm": true`. **Do not supply it on your own initiative.** Ask the
 human first, in plain language, naming what will be removed and how many.
@@ -112,9 +113,12 @@ you have changed something. That is a reason to be transparent, not a reason to 
 offsetting, mirroring, arraying, joining and cutting. Reaching for raw geometry when a typed tool
 exists is how models get corrupted.
 
-**`revit_execute_code` is the last resort.** It compiles and runs arbitrary C# against the model.
-It is gated, often disabled, and should stay that way. If a typed tool can do the job, use it. If
-you think you need it, explain to the human why no tool fits, and let them decide.
+**`revit_execute_code` and `revit_run_assembly_method` are the last resort.** They run arbitrary C#
+or a DLL's method in Revit. Both sit behind three gates - the server flag
+`--allow-code-execution`, **Code exec** in Revit (one Revit session only), and `confirm: true` - and
+should stay closed outside a test session. If a typed tool can do the job, use it. If you think you
+need one, explain to the human why no tool fits, and let them decide. A refusal names the closed
+gate; gates 1 and 2 are the human's to open, never yours.
 
 ---
 
@@ -144,6 +148,20 @@ whichever side they fall on. **Afterwards, read back both elements' lengths.**
 Views are required for dwg/pdf/image, ignored for ifc. It is allowed 5 minutes — a slow export is
 normal, not a hang.
 
+**Testing an add-in's dev build (AB add-ins: `tools\revit-bridge` in each repo)**
+Only when the human has opened gates 1 and 2 for a test session, and approved the run - tell them
+first what they will see (status-bar activity, a test copy coming to the front).
+1. `revit_list_open_documents` - note the active document and anything with windows: hands off.
+2. Make background test copies with `revit_execute_code`, `"transaction": "none"` (copy a sample,
+   `OpenDocumentFile` / `NewProjectDocument`, `SaveAs`), titled as the harness requires (e.g. `ABTA_`).
+3. Build the dev copy with a NEW assembly version each time (`tools\devbuild.ps1 -N <n>`): Revit never
+   unloads an assembly, and a rebuild under an old version is refused.
+4. `revit_run_assembly_method` with `assemblyPath`, `typeName` (the `DevHarness`), `methodName` and
+   `arguments` such as `[{"document":"ABTA_Source"},{"document":"ABTA_Dest"}]`. The active document
+   is refused; if a test copy came to the front, ask the human to click back to their own model.
+5. A long run returns a `jobId`: `revit_get_job_result` with `waitSeconds` until it finishes. Long
+   reports arrive whole in `fullTextFile`.
+
 **Before a submission**
 Health check → warnings → unplaced/unbounded rooms → linked-model status → purge **dry-run only**.
 Present findings. Purging is the user's decision.
@@ -163,5 +181,5 @@ When you are unsure whether a change is what the user meant — **ask before wri
 
 ---
 
-*AB Revit MCP Bridge · Revit 2020–2026 · by [Abdullah Lotfy](https://www.linkedin.com/in/abdullahalqublawi/)*
+*AB Revit MCP Bridge · Revit 2020–2027 · by [Abdullah Lotfy](https://www.linkedin.com/in/abdullahalqublawi/)*
 *Install: [github.com/Al-Qublawi/AB.RevitMcp](https://github.com/Al-Qublawi/AB.RevitMcp)*

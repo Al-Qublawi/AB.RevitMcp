@@ -39,10 +39,17 @@ requirement.
 re-raising the `ExternalEvent` to be called again. A burst of requests therefore cannot freeze
 Revit's interface.
 
-**Timeouts protect the caller, not Revit.** On timeout the work item is marked abandoned; if it has
-not started it is skipped when dequeued, and the caller receives a structured `TIMEOUT`. Work
-already executing is *allowed to finish* — aborting Revit's UI thread mid-transaction would corrupt
-the document. This is a deliberate, documented asymmetry.
+**Timeouts protect the caller, not Revit.** A work item is queued, started or abandoned, and the
+two transitions are one compare-and-swap each, so an item can never be reported as "not run" and
+then run anyway. On timeout an item that has not started is abandoned and the caller receives a
+structured `TIMEOUT` naming what Revit is busy with. Work already executing is *allowed to finish* —
+aborting Revit's UI thread mid-transaction would corrupt the document.
+
+**Jobs.** Until 1.6.0 that finished result was thrown away. Now the caller of a call that is still
+running gets `"state": "running"` and a `jobId` (the request id), and `JobStore` keeps the result when
+it arrives (in memory, the last 50, for the Revit session). `revit_get_job_result` is answered by
+`BridgeService` on the pipe thread, never queued, so it works while the job keeps the UI thread busy.
+The tool descriptions tell the AI never to repeat a running call - that would run it twice.
 
 ## 2. Wire protocol
 
@@ -76,8 +83,12 @@ immediately rather than blocking forever on a bogus read.
              "details": { "didYouMean": ["Level 01", "Level 02"] } } }
 ```
 
-Three tool names are reserved and answered by the bridge itself without entering the Revit API, so
-they still work while Revit is busy: `bridge/ping`, `bridge/describe`, `bridge/status`.
+Four names are reserved and answered by the bridge itself without entering the Revit API, so they
+still work while Revit is busy: `bridge/ping`, `bridge/describe`, `bridge/status` and (1.6.0)
+`bridge/compile-context` - see section 7. `revit_get_job_result` is answered the same way.
+
+A request may carry a `payload` beside `args`, outside the tool's schema: the assembly the server
+compiled for `revit_execute_code`.
 
 ### Discovery
 
@@ -114,18 +125,24 @@ Inside the group, `ToolContext.InTransaction` opens each `Transaction` with a
 `ProceedWithRollBack` on errors. Revit therefore never raises a modal dialog during an AI-driven
 session, and the captured failure text is surfaced in the tool response instead of being lost.
 
-Two tools are deliberately excluded from transaction wrapping:
+These tools are deliberately excluded from transaction wrapping:
 
 - `revit_set_selection` — touches UI state only; a transaction would pointlessly fail on a
   read-only model.
 - `revit_unload_links` — `RevitLinkType.Unload` manages its own document state and the Revit API
   refuses to run it under transaction control.
 
-Both still pass through full validation and the confirmation policy.
+- `revit_execute_code` — opens the transaction group itself for `transaction: "active"` (the
+  default, the behaviour before 1.6.0) and nothing at all for `"none"`. An open transaction on the
+  active document gets in the way of a test that works on BACKGROUND documents: it cannot start its
+  own transaction on the active document, and the active document cannot be saved or closed.
+- `revit_run_assembly_method` — never wrapped; a test harness manages its own transactions.
+
+All still pass through full validation and the confirmation policy.
 
 ## 4. Version compatibility
 
-Every Revit API breaking change between 2020 and 2026 is isolated in two files.
+Every Revit API breaking change between 2020 and 2027 is isolated in two files.
 
 `Revit/Compat.cs`:
 
@@ -167,7 +184,7 @@ exactly rather than degrading through a `double`.
 ## 6. The single source of truth
 
 `Contracts/Tools/ToolCatalog.cs` holds the name, description, risk category and JSON Schema of all
-46 tools. Both processes read it:
+81 tools. Both processes read it:
 
 - the **server** answers `tools/list` from it — so tools are advertised even while Revit is closed;
 - the **add-in** binds handlers to it — `ToolRouter.Register` throws at startup if a handler names
@@ -176,3 +193,28 @@ exactly rather than degrading through a `double`.
 
 A schema and its implementation therefore cannot silently drift apart, and `--print-tools`
 generates the documentation from the same descriptors.
+
+## 7. Code execution: where snippets are compiled
+
+`revit_execute_code` compiles a snippet into `AbMcpGenerated.Script.Execute(UIApplication uiApp,
+Document doc)`; `Contracts/Tools/CodeTemplate.cs` builds that source for both compilers, so errors
+report the same snippet line numbers everywhere.
+
+| Revit | Compiler | Where |
+| --- | --- | --- |
+| 2020-2024 (.NET Framework) | in-box `CSharpCodeProvider`, C# 5 | inside Revit, as before 1.6.0 |
+| 2025+ (.NET 8 / .NET 10) | Roslyn (`Microsoft.CodeAnalysis.CSharp`), C# 13 | in the MCP server process |
+
+Revit 2025+ have no compiler of their own, and Roslyn is NOT shipped into Revit.exe: other add-ins
+already load their own copies there (pyRevit 4.11 and another bridge's 4.8 were found in one
+session), and a further copy bound by simple name would get whichever loaded first. Instead the
+server asks `bridge/compile-context` for the running Revit's framework folders (2026.5 runs .NET 10
+although the add-in targets net8) and its RevitAPI / RevitAPIUI paths, compiles against them as
+metadata only, and sends the assembly as the request payload with its SHA-256. The add-in loads it
+with `Assembly.Load(byte[])`. An add-in older than 1.6.0 answers `UNKNOWN_TOOL` to that question and
+is sent the snippet as before.
+
+The three gates (`Contracts/Tools/CodeGates.cs`) are checked by the server - gate 1 itself, gate 2
+through `bridge/compile-context`, gate 3 from the arguments - and gates 2 and 3 again by the add-in.
+Gate 2 lives in memory only, for one Revit session; a value left in `settings.json` by 1.5.0 or
+earlier is cleared at startup.

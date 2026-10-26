@@ -27,6 +27,8 @@ namespace AB.RevitMcp.Addin.Bridge
         private ExternalEvent _externalEvent;
         private long _completed;
         private long _timedOut;
+        private long _stillRunning;
+        private volatile WorkItem _current;
         private double _totalExecMs;
         private volatile string _lastError;
         private int _disposed;
@@ -61,13 +63,14 @@ namespace AB.RevitMcp.Addin.Bridge
         /// already running on the UI thread is allowed to finish, because forcibly aborting the
         /// Revit UI thread would corrupt the document.
         /// </summary>
-        public async Task<T> EnqueueAsync<T>(string label, Func<UIApplication, T> work, int timeoutMs, CancellationToken ct)
+        public async Task<T> EnqueueAsync<T>(string label, Func<UIApplication, T> work, int timeoutMs, CancellationToken ct,
+                                             string jobId = null)
         {
             if (work == null) throw new ArgumentNullException("work");
             if (_externalEvent == null)
                 throw new InvalidOperationException("RevitDispatcher.Initialize() has not run - the bridge is not ready.");
 
-            var item = new WorkItem(label, delegate (UIApplication app) { return (object)work(app); });
+            var item = new WorkItem(label, jobId, delegate (UIApplication app) { return (object)work(app); });
             _queue.Enqueue(item);
 
             // Legal from any thread: this is the whole point of ExternalEvent.
@@ -88,14 +91,33 @@ namespace AB.RevitMcp.Addin.Bridge
 
                 ct.ThrowIfCancellationRequested();
 
-                item.Abandon();                          // skipped if it has not started yet
+                if (!item.TryAbandon())
+                {
+                    // It is already running on the UI thread and will run to the end: hand the
+                    // caller a job to collect instead of a TIMEOUT that throws the result away.
+                    Interlocked.Increment(ref _stillRunning);
+                    throw new StillRunningException(label, item.StartedUtc, item.Completion.Task);
+                }
+
+                // Never started, and now never will: nothing of it ran.
                 Interlocked.Increment(ref _timedOut);
+                WorkItem busy = _current;
+                string busyWith = busy != null
+                    ? " Revit is busy with '" + busy.Label + "'" +
+                      (busy.JobId != null ? " (job " + busy.JobId + ")" : string.Empty) + ", running for " +
+                      Math.Round((DateTime.UtcNow - busy.StartedUtc).TotalSeconds) + " s."
+                    : " Revit may be busy or showing a dialog.";
                 throw new TimeoutException(
-                    "Revit did not finish '" + label + "' within " + timeoutMs + " ms. " +
-                    "Revit may be busy, showing a dialog, or the operation may be too large - " +
-                    "try a smaller page size or raise the timeout.");
+                    "Revit did not start '" + label + "' within " + timeoutMs + " ms, so it was not run." +
+                    busyWith + " Retry when Revit is free.");
             }
         }
+
+        /// <summary>The work item running on the UI thread right now, if any (for status and messages).</summary>
+        public string CurrentLabel { get { WorkItem w = _current; return w != null ? w.Label : null; } }
+        public string CurrentJobId { get { WorkItem w = _current; return w != null ? w.JobId : null; } }
+        public DateTime CurrentStartedUtc { get { WorkItem w = _current; return w != null ? w.StartedUtc : DateTime.MinValue; } }
+        public long StillRunningCount { get { return Interlocked.Read(ref _stillRunning); } }
 
         /// <summary>
         /// Called by Revit ON THE UI THREAD. Drains the queue, yielding back to Revit periodically
@@ -108,16 +130,17 @@ namespace AB.RevitMcp.Addin.Bridge
             WorkItem item;
             while (_queue.TryDequeue(out item))
             {
-                if (item.IsAbandoned)
+                // Atomic: either this starts it, or the caller already gave up on it.
+                if (!item.TryStart())
                 {
                     item.Completion.TrySetCanceled();
                     continue;
                 }
 
                 var sw = Stopwatch.StartNew();
+                _current = item;
                 try
                 {
-                    item.MarkStarted();
                     object result = item.Work(app);
                     sw.Stop();
                     RecordSuccess(sw.Elapsed.TotalMilliseconds);
@@ -128,6 +151,10 @@ namespace AB.RevitMcp.Addin.Bridge
                     sw.Stop();
                     _lastError = item.Label + ": " + ex.Message;
                     item.Completion.TrySetException(ex);
+                }
+                finally
+                {
+                    _current = null;
                 }
 
                 if (slice.ElapsedMilliseconds > UiSliceMs && !_queue.IsEmpty)
@@ -169,12 +196,13 @@ namespace AB.RevitMcp.Addin.Bridge
 
         private sealed class WorkItem
         {
-            private int _abandoned;
-            private int _started;
+            private const int Queued = 0, Started = 1, Abandoned = 2;
+            private int _state;
 
-            public WorkItem(string label, Func<UIApplication, object> work)
+            public WorkItem(string label, string jobId, Func<UIApplication, object> work)
             {
                 Label = label ?? "work";
+                JobId = jobId;
                 Work = work;
                 // RunContinuationsAsynchronously is REQUIRED: without it the awaiting pipe handler
                 // would resume inline on Revit's UI thread and could deadlock the application.
@@ -182,13 +210,43 @@ namespace AB.RevitMcp.Addin.Bridge
             }
 
             public string Label { get; private set; }
+            public string JobId { get; private set; }
             public Func<UIApplication, object> Work { get; private set; }
             public TaskCompletionSource<object> Completion { get; private set; }
+            public DateTime StartedUtc { get; private set; }
 
-            public bool IsAbandoned { get { return Volatile.Read(ref _abandoned) == 1 && Volatile.Read(ref _started) == 0; } }
+            /// <summary>
+            /// Queued -> Started. Compare-and-swap with <see cref="TryAbandon"/>, so an item can never
+            /// be reported to the caller as "not run" and then run anyway.
+            /// </summary>
+            public bool TryStart()
+            {
+                StartedUtc = DateTime.UtcNow;
+                return Interlocked.CompareExchange(ref _state, Started, Queued) == Queued;
+            }
 
-            public void MarkStarted() { Interlocked.Exchange(ref _started, 1); }
-            public void Abandon() { Interlocked.Exchange(ref _abandoned, 1); }
+            /// <summary>Queued -> Abandoned. False when it has already started.</summary>
+            public bool TryAbandon()
+            {
+                return Interlocked.CompareExchange(ref _state, Abandoned, Queued) == Queued;
+            }
         }
+    }
+
+    /// <summary>
+    /// The caller's wait ran out while its work was ALREADY running on the UI thread. The work
+    /// continues to the end; <see cref="Completion"/> delivers its result.
+    /// </summary>
+    public sealed class StillRunningException : Exception
+    {
+        public StillRunningException(string label, DateTime startedUtc, Task<object> completion)
+            : base("'" + label + "' is still running in Revit.")
+        {
+            StartedUtc = startedUtc;
+            Completion = completion;
+        }
+
+        public DateTime StartedUtc { get; private set; }
+        public Task<object> Completion { get; private set; }
     }
 }

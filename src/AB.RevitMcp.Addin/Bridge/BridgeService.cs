@@ -26,6 +26,7 @@ namespace AB.RevitMcp.Addin.Bridge
 
         private readonly RevitDispatcher _dispatcher = new RevitDispatcher();
         private readonly RequestLog _log;
+        private readonly JobStore _jobs;
         private readonly ToolRouter _router;
         private readonly string _revitVersion;
         private readonly string _revitBuild;
@@ -50,7 +51,14 @@ namespace AB.RevitMcp.Addin.Bridge
             _pipeName = IpcConstants.BuildPipeName(_revitVersion, _processId);
 
             _log = new RequestLog(_processId, _revitVersion);
+            _jobs = new JobStore(_log);
             _router = new ToolRouter(_log);
+
+            // 1.6.0: the ribbon's code-execution switch lasts one Revit session. An ON stored by an
+            // earlier version is cleared here, so nothing is left switched on from a past session.
+            if (ClearPersistedCodeExecution())
+                _log.Warn("Code execution had been left ON in settings.json by an earlier version; cleared. " +
+                          "It is now switched on per Revit session from the ribbon.");
             _dispatcher.Initialize();
 
             _log.Info("Bridge created.", J.O(
@@ -174,6 +182,18 @@ namespace AB.RevitMcp.Addin.Bridge
                         "The request did not name a tool."), sw);
                 }
 
+                // Picking up a job's result needs no Revit API, and must work WHILE that job keeps
+                // the UI thread busy - so it is answered here, never queued behind the job.
+                if (string.Equals(request.Tool, ToolCatalog.GetJobResultToolName, StringComparison.OrdinalIgnoreCase))
+                {
+                    int wait = request.Arguments["waitSeconds"].AsInt(0);
+                    if (wait < 0) wait = 0;
+                    if (wait > 600) wait = 600;
+                    BridgeResponse jobResponse = await _jobs.LookupAsync(
+                        request.Id, request.Arguments["jobId"].AsString(null), wait, ct).ConfigureAwait(false);
+                    return Finish(request, jobResponse, sw);
+                }
+
                 // Hand the work to Revit's UI thread and wait for it.
                 BridgeResponse response;
                 try
@@ -182,7 +202,16 @@ namespace AB.RevitMcp.Addin.Bridge
                         request.Tool,
                         delegate (UIApplication app) { return _router.Execute(app, request); },
                         request.TimeoutMs,
-                        ct).ConfigureAwait(false);
+                        ct,
+                        request.Id).ConfigureAwait(false);
+                }
+                catch (StillRunningException running)
+                {
+                    // The work is under way on the UI thread and will finish; the caller collects it
+                    // later with revit_get_job_result instead of losing it to a TIMEOUT.
+                    response = BridgeResponse.Success(request.Id,
+                        _jobs.Register(request, running.StartedUtc, running.Completion, request.TimeoutMs),
+                        sw.Elapsed.TotalMilliseconds);
                 }
                 catch (TimeoutException ex)
                 {
@@ -261,6 +290,11 @@ namespace AB.RevitMcp.Addin.Bridge
                 return BridgeResponse.Success(request.Id, StatusJson(), 0);
             }
 
+            if (string.Equals(request.Tool, IpcConstants.OpCompileContext, StringComparison.OrdinalIgnoreCase))
+            {
+                return BridgeResponse.Success(request.Id, Tools.CodeTools.CompileContext(), 0);
+            }
+
             return null;   // not a bridge operation - route it to Revit
         }
 
@@ -287,6 +321,13 @@ namespace AB.RevitMcp.Addin.Bridge
                 "lastRequestTool", _lastRequestTool,
                 "lastRequestUtc", _lastRequestUtc == DateTime.MinValue ? null : _lastRequestUtc.ToString("o"),
                 "lastDispatcherError", _dispatcher.LastError,
+                "busyWith", _dispatcher.CurrentLabel == null ? null : J.O(
+                    "tool", _dispatcher.CurrentLabel,
+                    "jobId", _dispatcher.CurrentJobId,
+                    "runningSeconds", Math.Round((DateTime.UtcNow - _dispatcher.CurrentStartedUtc).TotalSeconds, 1)),
+                "jobsRunning", _jobs.RunningCount,
+                "callsTurnedIntoJobs", _dispatcher.StillRunningCount,
+                "codeExecution", Tools.CodeTools.GateStatus(),
                 "toolsInCatalog", ToolCatalog.Count,
                 "toolsImplemented", _router.HandlerCount,
                 "logDirectory", _log.LogDirectory,
@@ -382,39 +423,55 @@ namespace AB.RevitMcp.Addin.Bridge
         }
 
         /// <summary>
-        /// Gate 2 of 3 for revit_execute_code. Off unless a human turned it on in this install.
+        /// Gate 2 of 3 for the code tools (revit_execute_code, revit_run_assembly_method).
+        /// Since 1.6.0 it lives in memory only: switched on from the ribbon, it lasts until this
+        /// Revit closes, so a test session cannot leave it on by accident.
         /// </summary>
+        private static volatile bool _codeExecutionThisSession;
+
         public static bool ReadAllowCodeExecution()
+        {
+            return _codeExecutionThisSession;
+        }
+
+        public static void WriteAllowCodeExecution(bool allow)
+        {
+            _codeExecutionThisSession = allow;
+        }
+
+        /// <summary>
+        /// Up to 1.5.0 the switch was stored in settings.json and stayed on across restarts. Clears
+        /// a stored ON; returns true when there was one.
+        /// </summary>
+        public static bool ClearPersistedCodeExecution()
         {
             try
             {
                 if (!File.Exists(SettingsPath)) return false;
                 JsonValue v;
-                if (JsonValue.TryParse(File.ReadAllText(SettingsPath), out v))
-                    return v["allowCodeExecution"].AsBool(false);
+                if (!JsonValue.TryParse(File.ReadAllText(SettingsPath), out v)) return false;
+                if (!v["allowCodeExecution"].AsBool(false)) return false;
+                WriteSettings(v["autoStart"].AsBool(false));
+                return true;
             }
-            catch (Exception) { }
-            return false;
-        }
-
-        public static void WriteAllowCodeExecution(bool allow)
-        {
-            WriteSettings(ReadAutoStart(), allow);
+            catch (Exception) { return false; }
         }
 
         public static void WriteAutoStart(bool autoStart)
         {
-            WriteSettings(autoStart, ReadAllowCodeExecution());
+            WriteSettings(autoStart);
         }
 
-        private static void WriteSettings(bool autoStart, bool allowCodeExecution)
+        private static void WriteSettings(bool autoStart)
         {
             try
             {
                 Directory.CreateDirectory(IpcConstants.DataRoot);
+                // allowCodeExecution is written false only so a 1.5.0 add-in sharing this file
+                // (another Revit release not yet upgraded) reads it as off.
                 File.WriteAllText(SettingsPath,
                     J.O("autoStart", autoStart,
-                        "allowCodeExecution", allowCodeExecution).ToJson(true));
+                        "allowCodeExecution", false).ToJson(true));
             }
             catch (Exception) { }
         }

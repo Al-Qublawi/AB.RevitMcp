@@ -4,12 +4,12 @@ A universal **Model Context Protocol** server that lets any MCP-compatible AI cl
 Desktop, Claude Code, Cursor, VS Code, DeepSeek, Continue, n8n, or anything else that speaks MCP —
 safely **query, create and modify Autodesk Revit models**.
 
-Revit 2020 through 2026. 78 tools. Metric in, metric out. No AI vendor lock-in.
+Revit 2020 through 2027. 81 tools. Metric in, metric out. No AI vendor lock-in.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-![Revit 2020–2026](https://img.shields.io/badge/Revit-2020--2026-0696D7)
-![Tools](https://img.shields.io/badge/MCP%20tools-78-brightgreen)
-![.NET](https://img.shields.io/badge/.NET-Framework%204.8%20%7C%208.0-512BD4)
+![Revit 2020–2027](https://img.shields.io/badge/Revit-2020--2027-0696D7)
+![Tools](https://img.shields.io/badge/MCP%20tools-81-brightgreen)
+![.NET](https://img.shields.io/badge/.NET-Framework%204.8%20%7C%208%20%7C%2010-512BD4)
 
 **by [Abdullah Lotfy](https://www.linkedin.com/in/abdullahalqublawi/)**
 
@@ -42,8 +42,8 @@ safe. Nothing else in the add-in calls the Revit API off that thread.
 | --- | --- | --- |
 | `AB.RevitMcp.Contracts` | `net48` + `netstandard2.0` + `net8.0-windows` | JSON DOM, wire protocol, **the tool catalogue**, schema validator. Zero package references. The real `net48` target is mandatory - see below. |
 | `AB.RevitMcp.Ipc` | `net48` + `net8.0-windows` | Length-prefixed named-pipe framing, ACL'd pipe server/client, endpoint discovery. |
-| `AB.RevitMcp.Addin` | `net48` + `net8.0-windows` | Revit add-in: ribbon, UI-thread dispatcher, transaction policy, 78 tool implementations. |
-| `AB.RevitMcp.Server` | `net8.0-windows` | Standalone MCP server: JSON-RPC over stdio or Streamable HTTP. |
+| `AB.RevitMcp.Addin` | `net48` + `net8.0-windows` + `net10.0-windows` | Revit add-in: ribbon, UI-thread dispatcher, transaction policy, jobs, 81 tool implementations. |
+| `AB.RevitMcp.Server` | `net8.0-windows` | Standalone MCP server: JSON-RPC over stdio or Streamable HTTP. Compiles `revit_execute_code` snippets for Revit 2025+ (Roslyn). |
 | `AB.RevitMcp.MockBridge` | `net8.0-windows` | Fake Revit bridge for testing a client configuration without opening Revit. |
 | `installer\` | — | `RevitMcp.msi.psd1` + `RevitMcp.AiClients.wxs`: the `.msi`, built by the AB Adv Tools kit. No code runs inside it. |
 
@@ -64,7 +64,7 @@ The tool catalogue lives in the **shared contracts assembly**, which is why the 
 
 ## Version compatibility
 
-`AB.RevitMcp.Addin` multi-targets `net48;net8.0-windows` and compiles once per Revit release with
+`AB.RevitMcp.Addin` multi-targets `net48;net8.0-windows;net10.0-windows` and compiles once per Revit release with
 version symbols, so each breaking API change is handled in exactly one place (`Revit/Compat.cs`,
 `Revit/Metric.cs`):
 
@@ -76,7 +76,8 @@ version symbols, so each breaking API change is handled in exactly one place (`R
 | 2023 | .NET Framework 4.8 | `-f net48 -p:RevitVersion=2023` | `Category.BuiltInCategory` |
 | 2024 | .NET Framework 4.8 | `-f net48 -p:RevitVersion=2024` | `ElementId.Value` (long), `Document.GetUnusedElements` |
 | 2025 | .NET 8 | `-f net8.0-windows -p:RevitVersion=2025` | runtime transition |
-| 2026 | .NET 8 | `-f net8.0-windows -p:RevitVersion=2026` | — |
+| 2026 | .NET 8 (26.5: .NET 10) | `-f net8.0-windows -p:RevitVersion=2026` | the net8 build runs under 26.5's .NET 10 |
+| 2027 | .NET 10 | `-f net10.0-windows -p:RevitVersion=2027` | runtime transition (build-checked; not yet run in a live 2027) |
 
 The `.csproj` errors out with a clear message if you pair the wrong TFM with a release, or if
 `RevitAPI.dll` is missing.
@@ -118,11 +119,11 @@ browser, configure or remove the `revit` server, and **Verify** the whole chain.
 For unattended IT deployment:
 
 ```
-msiexec /i AB.RevitMcp-1.5.0.msi /qn               :: clients found are configured when Revit starts
-msiexec /i AB.RevitMcp-1.5.0.msi /qn NOCLIENTS=1   :: configure no AI client
-msiexec /i AB.RevitMcp-1.5.0.msi /qn REVIT2022=0   :: leave a release out (ALLRELEASES=1: every release)
-msiexec /i AB.RevitMcp-1.5.0.msi /l*v setup.log    :: with a log
-msiexec /x AB.RevitMcp-1.5.0.msi /qn               :: remove it again
+msiexec /i AB.RevitMcp-1.6.0.msi /qn               :: clients found are configured when Revit starts
+msiexec /i AB.RevitMcp-1.6.0.msi /qn NOCLIENTS=1   :: configure no AI client
+msiexec /i AB.RevitMcp-1.6.0.msi /qn REVIT2022=0   :: leave a release out (ALLRELEASES=1: every release)
+msiexec /i AB.RevitMcp-1.6.0.msi /l*v setup.log    :: with a log
+msiexec /x AB.RevitMcp-1.6.0.msi /qn               :: remove it again
 ```
 
 If Revit is open while installing, Windows lists it and asks you to close it, or to let the
@@ -244,14 +245,15 @@ reconnects automatically if Revit restarts.
 | Flag | Effect |
 | --- | --- |
 | `--read-only` | Advertises every tool but refuses all write and destructive calls. |
+| `--allow-code-execution` | Gate 1 of 3 for `revit_execute_code` and `revit_run_assembly_method` (see [the tool reference](docs/TOOLS.md#code-execution-and-development-testing)). Off by default; take it out again after a test session. |
 | `--revit-version 2024` | Pin to one Revit release when several are open. |
-| `--timeout 60000` | Raise the per-request budget (default 30 s, max 10 min). Long-running tools carry their own budget already — `revit_export` gets 5 minutes — and this flag only ever raises it. |
+| `--timeout 60000` | Raise the per-request budget (default 30 s, max 10 min). Long-running tools carry their own budget already — `revit_export` gets 5 minutes — and this flag only ever raises it. A call still running when its budget runs out becomes a job (`revit_get_job_result`), not a lost result. |
 | `--http --port 3333` | Streamable HTTP on loopback instead of stdio. |
 | `--print-tools` | Print the full tool reference as Markdown. |
 | `--verbose` | Log protocol traffic to stderr. |
 
 Environment equivalents: `AB_REVITMCP_PIPE`, `AB_REVITMCP_REVIT_VERSION`,
-`AB_REVITMCP_TIMEOUT_MS`, `AB_REVITMCP_READONLY`.
+`AB_REVITMCP_TIMEOUT_MS`, `AB_REVITMCP_READONLY`, `AB_REVITMCP_ALLOW_CODE`.
 
 ---
 
@@ -261,15 +263,15 @@ Full generated reference: **[docs/TOOLS.md](docs/TOOLS.md)**
 
 | Category | Count | Transaction behaviour | Gate |
 | --- | ---: | --- | --- |
-| **Read** | 24 | never opens a transaction | none |
+| **Read** | 26 | never opens a transaction | none |
 | **Write** | 48 | one `TransactionGroup`, assimilated into a single undo step | none |
-| **Destructive** | 6 | one `TransactionGroup`, rolled back on any failure | `"confirm": true` |
-| **Total** | **78** | | |
+| **Destructive** | 7 | one `TransactionGroup`, rolled back on any failure (the two code tools: see below) | `"confirm": true` |
+| **Total** | **81** | | |
 
 **Read** — model info, model health, bridge status, categories, levels, phases, worksets, views,
 active view, view centre, sheets, schedules, warnings, linked models, materials, family types,
 rooms/spaces/areas, grids, MEP systems, element query, text search, element parameters, element
-geometry, current selection.
+geometry, current selection, open documents (including background ones), and the result of a long-running job.
 
 **Write** — *modelling:* walls, columns, beams, floors, ceilings, family instances, doors, windows,
 levels, grids, rooms, reference planes; *MEP:* ducts, pipes, cable trays, conduit; *annotation:*
@@ -279,10 +281,14 @@ copy, mirror, array, group, split, trim/extend, align, offset, pin, join geometr
 phase/demolish; *data:* parameter writes, material and workset assignment, Revit selection, family
 loading, export.
 
-**Destructive** — delete elements, delete views, purge unused, unload links, remove links, and
-`revit_execute_code`. That last one is a deliberate escape hatch for work no typed tool covers; it
-is gated behind `confirm: true` like every other destructive tool, and you can remove it entirely
-by running the server with `--read-only`, or by deleting its registration from the catalogue.
+**Destructive** — delete elements, delete views, purge unused, unload links, remove links, and the
+two code tools: `revit_execute_code` (C# snippets) and `revit_run_assembly_method` (a static method
+of a DLL - how the AB add-ins run their test harnesses on background copies). They are the
+deliberate escape hatch for work no typed tool covers, and sit behind three gates: the server flag
+`--allow-code-execution`, **Code exec** in Revit (on for one Revit session only), and `confirm: true`
+on every call. Revit 2025+ snippets are compiled by the MCP server, so no compiler is loaded into
+Revit. How to switch them on for a test session and off again:
+[docs/TOOLS.md](docs/TOOLS.md#code-execution-and-development-testing).
 
 ---
 
@@ -304,13 +310,17 @@ Layered, and enforced in code rather than documented in prose:
    leave the model half-edited.
 5. **No modal dialogs** — a `IFailuresPreprocessor` swallows warnings and rolls back on errors, so
    an AI-driven session can never hang Revit behind a dialog nobody is watching.
-6. **No arbitrary code execution** — there is no "run this C#/Python" tool, by design. The attack
-   surface is exactly the 46 declared schemas.
+6. **Arbitrary code only behind three gates** — every tool but two is a fixed, schema-validated
+   operation. `revit_execute_code` and `revit_run_assembly_method` refuse to run unless the server
+   was started with `--allow-code-execution`, **Code exec** is on in this Revit session (it switches
+   itself off when Revit closes), and the call carries `confirm: true`; a refusal names the closed
+   gate. `--read-only` refuses them as well.
 7. **Timeouts and cancellation** — 30 s per request by default, and a tool that is inherently
    long declares its own budget instead (`revit_export`: 5 minutes), because an export has no
-   page size the caller could reduce. On timeout, queued work is
-   discarded and the caller gets a structured `TIMEOUT`; work already running on the UI thread is
-   allowed to finish, because forcibly aborting Revit's UI thread would corrupt the document.
+   page size the caller could reduce. On timeout, work that has not started is discarded and the
+   caller gets a structured `TIMEOUT` naming what Revit is busy with; work already running on the UI
+   thread is allowed to finish, because forcibly aborting Revit's UI thread would corrupt the
+   document - and the caller gets a `jobId` to collect its result with `revit_get_job_result`.
 8. **Local only** — an ACL'd named pipe restricted to the current Windows user. The HTTP transport
    binds loopback and validates `Origin` against DNS rebinding. Nothing leaves the machine.
 9. **Opt-in** — no AI can reach the model until a human presses **Start Bridge**.

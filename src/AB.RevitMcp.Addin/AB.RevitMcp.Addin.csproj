@@ -5,17 +5,19 @@
      Revit add-in - multi-targeted across the .NET runtime transition
     ============================================================================
        Revit 2020 - 2024   .NET Framework 4.8      -> net48
-       Revit 2025 - 2027   .NET 8 (Windows)        -> net8.0-windows
+       Revit 2025 - 2026   .NET 8 (Windows)        -> net8.0-windows
+       Revit 2027          .NET 10 (Windows)       -> net10.0-windows
 
      Build one specific release:
        dotnet build -c Release -f net48          -p:RevitVersion=2022
        dotnet build -c Release -f net8.0-windows -p:RevitVersion=2026
+       dotnet build -c Release -f net10.0-windows -p:RevitVersion=2027
 
      build/build-all.ps1 loops the whole matrix.
   -->
 
   <PropertyGroup>
-    <TargetFrameworks>net48;net8.0-windows</TargetFrameworks>
+    <TargetFrameworks>net48;net8.0-windows;net10.0-windows</TargetFrameworks>
     <RootNamespace>AB.RevitMcp.Addin</RootNamespace>
     <AssemblyName>AB.RevitMcp.Addin</AssemblyName>
     <PlatformTarget>x64</PlatformTarget>
@@ -30,6 +32,7 @@
   <PropertyGroup>
     <RevitVersion Condition="'$(RevitVersion)' == '' and '$(TargetFramework)' == 'net48'">2024</RevitVersion>
     <RevitVersion Condition="'$(RevitVersion)' == '' and '$(TargetFramework)' == 'net8.0-windows'">2026</RevitVersion>
+    <RevitVersion Condition="'$(RevitVersion)' == '' and '$(TargetFramework)' == 'net10.0-windows'">2027</RevitVersion>
     <RevitVersion Condition="'$(RevitVersion)' == ''">2024</RevitVersion>
     <RevitApiDir Condition="'$(RevitApiDir)' == ''">$(RevitProgramRoot)\Revit $(RevitVersion)</RevitApiDir>
     <OutputPath>$(MSBuildThisFileDirectory)..\..\artifacts\$(Configuration)\Revit$(RevitVersion)\</OutputPath>
@@ -61,7 +64,8 @@
       Gating the PackageReference on this keeps each release's package on the one framework that
       can consume it.
     -->
-    <RevitTargetFramework Condition="'$(RevitVersion)' &gt;= '2025'">net8.0-windows</RevitTargetFramework>
+    <RevitTargetFramework Condition="'$(RevitVersion)' &gt;= '2025' and '$(RevitVersion)' &lt; '2027'">net8.0-windows</RevitTargetFramework>
+    <RevitTargetFramework Condition="'$(RevitVersion)' &gt;= '2027'">net10.0-windows</RevitTargetFramework>
     <RevitTargetFramework Condition="'$(RevitVersion)' &lt; '2025'">net48</RevitTargetFramework>
 
     <!-- Revit release -> pinned reference-assembly package version. -->
@@ -72,6 +76,8 @@
     <RevitApiPackageVersion Condition="'$(RevitVersion)' == '2024'">2024.3.60</RevitApiPackageVersion>
     <RevitApiPackageVersion Condition="'$(RevitVersion)' == '2025'">2025.4.60</RevitApiPackageVersion>
     <RevitApiPackageVersion Condition="'$(RevitVersion)' == '2026'">2026.4.10</RevitApiPackageVersion>
+    <!-- Revit 2027 runs on .NET 10 and its API assemblies reference System.Runtime 10: net10 only. -->
+    <RevitApiPackageVersion Condition="'$(RevitVersion)' == '2027'">2027.2.0</RevitApiPackageVersion>
 
     <!--
       AppendTargetFrameworkToOutputPath=false above applies to the INTERMEDIATE path too, so both
@@ -90,6 +96,7 @@
       2023+  Category.BuiltInCategory property
       2024+  ElementId.Value (long) replaces ElementId.IntegerValue; Document.GetUnusedElements
       2025+  .NET 8 runtime
+      2027+  .NET 10 runtime (net10.0-windows build)
   -->
   <PropertyGroup>
     <DefineConstants>$(DefineConstants);REVIT$(RevitVersion)</DefineConstants>
@@ -173,10 +180,8 @@
 
     <Error Condition="'$(UseRevitApiPackages)' != 'true' and !Exists('$(RevitApiDir)\RevitAPI.dll')"
            Text="RevitAPI.dll was not found at '$(RevitApiDir)'. Install Revit $(RevitVersion), pass -p:RevitApiDir=&lt;folder containing RevitAPI.dll&gt;, or drop -p:UseRevitApiPackages=false to build from the pinned reference packages." />
-    <Error Condition="'$(TargetFramework)' == 'net48' and '$(RevitVersion)' &gt;= '2025'"
-           Text="Revit $(RevitVersion) runs on .NET 8. Build it with -f net8.0-windows." />
-    <Error Condition="'$(TargetFramework)' == 'net8.0-windows' and '$(RevitVersion)' &lt; '2025'"
-           Text="Revit $(RevitVersion) runs on .NET Framework 4.8. Build it with -f net48." />
+    <Error Condition="'$(TargetFramework)' != '$(RevitTargetFramework)'"
+           Text="Revit $(RevitVersion) runs on $(RevitTargetFramework). Build it with -f $(RevitTargetFramework)." />
   </Target>
 
   <Target Name="ReportRevitTarget" AfterTargets="Build">

@@ -38,7 +38,78 @@ namespace AB.RevitMcp.Server
                 "`\"dryRun\": true`, which performs the operation, reports exactly what it would " +
                 "affect, and then rolls the model back.");
 
+            AppendCodeExecution(sb);
+
             return sb.ToString();
+        }
+
+        /// <summary>The gates, how to switch them for a test session, and the dev-test workflow.</summary>
+        private static void AppendCodeExecution(StringBuilder sb)
+        {
+            string[] lines =
+            {
+                "## Code execution and development testing",
+                "",
+                "`revit_execute_code` (C# snippets) and `revit_run_assembly_method` (a static method of a DLL, " +
+                "e.g. an add-in's `DevHarness`) can do anything the Revit API allows. Both sit behind the " +
+                "same three gates, and a refusal always names the closed gate and shows the state of all three.",
+                "",
+                "| Gate | Where | Default | Open | Close |",
+                "| --- | --- | --- | --- | --- |",
+                "| 1 | MCP server | off | add `--allow-code-execution` to the server's `args` (or `AB_REVITMCP_ALLOW_CODE=1` in its `env`), then restart or reconnect the server | take it out again, restart or reconnect |",
+                "| 2 | Revit | off at every Revit start | AB Adv Tools > MCP Bridge > **Code exec: off** > Yes | press it again, or close Revit |",
+                "| 3 | each call | - | `\"confirm\": true`, after the human approved that run | - |",
+                "",
+                "### A test session, on and off",
+                "",
+                "1. In the AI client's config, give the `revit` server `\"args\": [\"--allow-code-execution\"]` " +
+                "and reconnect it (Claude Code: `/mcp`, or a new session).",
+                "2. In Revit: **Start Bridge**, then **Code exec**.",
+                "3. Run the tests. `revit_bridge_status` shows all gates: `mcpServer.gate1AllowCodeExecution` " +
+                "and `codeExecution.gate2RevitSwitch`.",
+                "4. Afterwards remove the flag again and reconnect. Gate 2 switches itself off when Revit closes.",
+                "",
+                "### What runs where",
+                "",
+                "- **Compiling.** Revit 2020-2024 compile snippets inside Revit with the in-box compiler (C# 5). " +
+                "Revit 2025 and newer have no compiler; the MCP server compiles the snippet with Roslyn " +
+                "(C# 13) against the running Revit's own framework and API assemblies and sends the finished " +
+                "assembly. No compiler is ever loaded into Revit.",
+                "- **Transactions.** `revit_execute_code` with `\"transaction\": \"active\"` (default) runs " +
+                "inside one transaction on the active document: one undo step, rolled back on any error. " +
+                "With `\"none\"` nothing is opened and `doc` may be null - the code opens, changes, saves " +
+                "and closes BACKGROUND documents with transactions of its own. `revit_run_assembly_method` " +
+                "never opens a transaction.",
+                "- **Long runs.** A call still running when its wait (`waitSeconds`, default 30 s) runs out " +
+                "answers `\"state\": \"running\"` with a `jobId`; the work carries on. Collect it with " +
+                "`revit_get_job_result` (answered even while Revit is busy; `waitSeconds` lets it wait). " +
+                "Never repeat the original call. This applies to every tool, not only these two.",
+                "- **Long text.** A returned string over `maxInlineChars` (20000) is written in full to " +
+                "`%LOCALAPPDATA%\\ABRevitMcp\\results` and shortened inline to its start and end.",
+                "- **Dev builds.** `revit_run_assembly_method` loads the DLL from its bytes (with its .pdb), " +
+                "reuses identical bytes, and refuses a rebuilt DLL that kept its version - Revit never " +
+                "unloads an assembly, so each dev build needs a new version. DLLs beside it load on demand. " +
+                "Documents are picked by title prefix; the active document is refused unless " +
+                "`allowActiveDocument` is true. `revit_list_open_documents` shows which documents are " +
+                "background copies (`openWindows: 0`).",
+                "",
+                "### Example: an add-in's test harness on background copies",
+                "",
+                "```json",
+                "{ \"name\": \"revit_run_assembly_method\", \"arguments\": {",
+                "    \"assemblyPath\": \"%LOCALAPPDATA%\\\\Temp\\\\ABTransferDev\\\\v5\\\\AB.TransferAny.Addin.dll\",",
+                "    \"typeName\": \"AB.TransferAny.Addin.Diagnostics.DevHarness\",",
+                "    \"methodName\": \"RunAll\",",
+                "    \"arguments\": [ { \"document\": \"ABTA_Source\" }, { \"document\": \"ABTA_Dest\" } ],",
+                "    \"waitSeconds\": 30, \"confirm\": true } }",
+                "```",
+                "",
+                "The background copies themselves are made with `revit_execute_code` and " +
+                "`\"transaction\": \"none\"` (open a copy of a sample with `OpenDocumentFile`, create one with " +
+                "`NewProjectDocument`, `SaveAs`).",
+                ""
+            };
+            foreach (string line in lines) sb.AppendLine(line);
         }
 
         private static void AppendSummary(StringBuilder sb)

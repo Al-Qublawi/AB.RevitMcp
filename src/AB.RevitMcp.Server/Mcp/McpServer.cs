@@ -213,11 +213,16 @@ namespace AB.RevitMcp.Server.Mcp
                 "should ask the human before you do. Most of them also accept \"dryRun\": true, which " +
                 "reports the exact blast radius and then rolls the model back - prefer that first.\n\n" +
                 "UNDO - each write tool is a single Revit undo step, so a human can reverse anything " +
-                "you do with Ctrl+Z." +
+                "you do with Ctrl+Z.\n\n" +
+                "LONG RUNS - a call still running when its wait runs out answers with state \"running\" " +
+                "and a jobId. The work carries on inside Revit: collect it with revit_get_job_result and " +
+                "never repeat the original call, which would run it twice." +
                 (_options.AllowCodeExecution
-                    ? "\n\nCODE EXECUTION is enabled on this server. Reach for revit_execute_code only " +
-                      "when no bounded tool fits - it has no schema validation and can do anything " +
-                      "the Revit API allows."
+                    ? "\n\nCODE EXECUTION is enabled on this server (gate 1 of 3). Reach for " +
+                      "revit_execute_code or revit_run_assembly_method only when no bounded tool fits - " +
+                      "they have no schema validation and can do anything the Revit API allows. Run " +
+                      "tests on background documents (revit_list_open_documents), never on the model " +
+                      "the human has open."
                     : string.Empty) +
                 (_options.AllowDestructive
                     ? string.Empty
@@ -237,7 +242,7 @@ namespace AB.RevitMcp.Server.Mcp
                 JsonValue filtered = JsonValue.NewArray();
                 foreach (JsonValue tool in tools.Items)
                 {
-                    if (tool["name"].AsString(null) == ToolCatalog.ExecuteCodeToolName) continue;
+                    if (CodeGates.IsCodeTool(tool["name"].AsString(null))) continue;
                     filtered.Add(tool);
                 }
                 tools = filtered;
@@ -276,15 +281,13 @@ namespace AB.RevitMcp.Server.Mcp
                                  ToolCatalog.Count + " available tools.");
             }
 
-            // ---- policy gates, applied before Revit is even contacted ----
-            if (name == ToolCatalog.ExecuteCodeToolName && !_options.AllowCodeExecution)
+            // ---- policy gates, applied before anything runs in Revit ----
+            JsonValue compileContext = null;
+            if (CodeGates.IsCodeTool(name))
             {
-                return ToolError(
-                    "'" + name + "' is disabled. This MCP server was not started with " +
-                    "--allow-code-execution.\n\n" +
-                    "That is deliberate: it compiles and runs arbitrary C# against the live model, " +
-                    "with none of the schema validation the other tools have. Use one of the " +
-                    (ToolCatalog.Count - 1) + " bounded tools instead.");
+                CodeGateCheck check = await CheckCodeGatesAsync(name, arguments, ct).ConfigureAwait(false);
+                if (check.Refusal != null) return check.Refusal;
+                compileContext = check.Context;
             }
 
             if (!_options.AllowDestructive && !descriptor.IsReadOnly)
@@ -311,6 +314,16 @@ namespace AB.RevitMcp.Server.Mcp
                     "exact effect without modifying the model.");
             }
 
+            // ---- Revit 2025+: compile the snippet here, never inside Revit ----
+            JsonValue compiled = JsonValue.Null;
+            if (name == ToolCatalog.ExecuteCodeToolName && compileContext != null &&
+                compileContext["compileMode"].AsString(null) == "server")
+            {
+                JsonValue compileError;
+                compiled = CompileForRevit(arguments, compileContext, out compileError);
+                if (compileError != null) return compileError;
+            }
+
             // ---- dispatch to Revit ----
             var request = new BridgeRequest
             {
@@ -319,9 +332,11 @@ namespace AB.RevitMcp.Server.Mcp
                 Arguments = arguments,
                 // A tool that declares its own budget (export, for one) gets it; everything else
                 // uses the server default. Declared budgets act as a floor, so --timeout can still
-                // raise them but never silently cut an export short.
-                TimeoutMs = descriptor.EffectiveTimeoutMs(_options.RequestTimeoutMs),
-                ClientName = _clientName
+                // raise them but never silently cut an export short. Past the budget a call that
+                // is already running becomes a job rather than a lost result.
+                TimeoutMs = WaitBudgetMs(descriptor, arguments),
+                ClientName = _clientName,
+                Payload = compiled
             };
 
             BridgeResponse response;
@@ -344,8 +359,22 @@ namespace AB.RevitMcp.Server.Mcp
 
             JsonValue result = response.Result ?? JsonValue.NewObject();
 
+            if (name == "revit_bridge_status" && result.IsObject)
+            {
+                // Gate 1 lives here, so only the server can report it.
+                result.Set("mcpServer", J.O(
+                    "version", typeof(McpServer).Assembly.GetName().Version.ToString(),
+                    "gate1AllowCodeExecution", _options.AllowCodeExecution,
+                    "readOnly", !_options.AllowDestructive,
+                    "requestTimeoutMs", _options.RequestTimeoutMs,
+                    "snippetCompilerForRevit2025Plus", "Roslyn, in this MCP server process"));
+            }
+
             JsonValue content = JsonValue.NewArray();
-            content.Add(J.O("type", "text", "text", result.ToJson(true)));
+            string resultText = result.ToJson(true);
+            if (result.IsObject && result["state"].AsString(null) == "running")
+                resultText = result["message"].AsString("Still running.") + "\n\n" + resultText;
+            content.Add(J.O("type", "text", "text", resultText));
 
             JsonValue payload = J.O("content", content, "isError", false);
 
@@ -353,6 +382,126 @@ namespace AB.RevitMcp.Server.Mcp
             if (result.IsObject) payload.Set("structuredContent", result);
 
             return payload;
+        }
+
+        // ==================================================================
+        //  code tools: gates, compile, budgets
+        // ==================================================================
+        private sealed class CodeGateCheck
+        {
+            public JsonValue Refusal;     // a tool error to return, or null
+            public JsonValue Context;     // bridge/compile-context, or null for an older add-in
+        }
+
+        /// <summary>
+        /// All three gates, checked together so the refusal can say which one is closed and what
+        /// state the other two are in. Gate 2 lives in Revit; the bridge reports it without
+        /// touching the UI thread. The add-in checks gates 2 and 3 again on its own.
+        /// </summary>
+        private async Task<CodeGateCheck> CheckCodeGatesAsync(string name, JsonValue arguments, CancellationToken ct)
+        {
+            var check = new CodeGateCheck();
+            bool gate1 = _options.AllowCodeExecution;
+            bool gate3 = arguments["confirm"].IsBool && arguments["confirm"].AsBool(false);
+            CodeGates.State gate2 = CodeGates.State.Unknown;
+            string unreachable = null;
+
+            try
+            {
+                BridgeResponse r = await _bridge.SendAsync(new BridgeRequest
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    Tool = IpcConstants.OpCompileContext,
+                    TimeoutMs = 10000,
+                    ClientName = _clientName
+                }, ct).ConfigureAwait(false);
+
+                if (r.Ok && r.Result != null && r.Result.IsObject)
+                {
+                    check.Context = r.Result;
+                    gate2 = CodeGates.From(r.Result["codeExecutionAllowed"].AsBool(false));
+                }
+                // An add-in older than 1.6.0 answers UNKNOWN_TOOL; it enforces gate 2 itself.
+            }
+            catch (BridgeUnavailableException ex)
+            {
+                unreachable = ex.Message;
+            }
+
+            int refusedBy = !gate1 ? 1 : gate2 == CodeGates.State.Closed ? 2 : !gate3 ? 3 : 0;
+            if (refusedBy != 0)
+            {
+                string text = CodeGates.Refusal(name, refusedBy, CodeGates.From(gate1), gate2, CodeGates.From(gate3));
+                if (gate2 == CodeGates.State.Unknown && unreachable != null)
+                    text += "\n\n(Gate 2 is unknown because Revit is not reachable: " + unreachable + ")";
+                check.Refusal = ToolError(text, BridgeErrorCodes.GateClosed);
+                return check;
+            }
+
+            if (unreachable != null) check.Refusal = ToolError(unreachable);
+            return check;
+        }
+
+        /// <summary>Compiles a revit_execute_code snippet for a Revit 2025+ bridge. Kept apart so Roslyn loads only here.</summary>
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private JsonValue CompileForRevit(JsonValue arguments, JsonValue context, out JsonValue error)
+        {
+            error = null;
+            var usings = new List<string>();
+            foreach (JsonValue u in arguments["usings"].Items) { string s = u.AsString(null); if (!string.IsNullOrEmpty(s)) usings.Add(s); }
+
+            SnippetCompiler.Outcome outcome;
+            try
+            {
+                outcome = SnippetCompiler.Compile(arguments["code"].AsString(string.Empty), usings, context);
+            }
+            catch (Exception ex)
+            {
+                error = ToolError("The MCP server could not compile the snippet: " + ex.GetType().Name + ": " + ex.Message);
+                return JsonValue.Null;
+            }
+
+            string target = "Revit " + context["revitRelease"].AsString("?") + " (" + context["runtime"].AsString("?") + ")";
+            if (outcome.Failure != null)
+            {
+                error = ToolError("The MCP server could not compile for " + target + ": " + outcome.Failure);
+                return JsonValue.Null;
+            }
+
+            if (!outcome.Success)
+            {
+                JsonValue details = J.O("errors", outcome.Errors,
+                    "note", "The snippet is the body of: object Execute(UIApplication uiApp, Document doc). " +
+                            "Compiled by " + SnippetCompiler.CompilerDescription + " for " + target + ".");
+                error = ToolError("[" + BridgeErrorCodes.InvalidArgument + "] The code did not compile. Line numbers " +
+                                  "are relative to your snippet.\n\nDetails: " + details.ToJson(true),
+                                  BridgeErrorCodes.InvalidArgument);
+                return JsonValue.Null;
+            }
+
+            return J.O(
+                "assembly", Convert.ToBase64String(outcome.Assembly),
+                "sha256", outcome.Sha256,
+                "compiler", SnippetCompiler.CompilerDescription);
+        }
+
+        /// <summary>
+        /// How long to wait for Revit. The code tools take an explicit waitSeconds (a run that
+        /// outlives it becomes a job, it is never cut short); revit_get_job_result waits as long as
+        /// it was asked to plus slack; everything else keeps its declared budget.
+        /// </summary>
+        private int WaitBudgetMs(ToolDescriptor descriptor, JsonValue arguments)
+        {
+            int budget = descriptor.EffectiveTimeoutMs(_options.RequestTimeoutMs);
+            int waitSeconds = arguments["waitSeconds"].AsInt(-1);
+
+            if (descriptor.Name == ToolCatalog.GetJobResultToolName)
+                return Math.Min(Math.Max(budget, Math.Max(0, waitSeconds) * 1000 + 5000), IpcConstants.MaxRequestTimeoutMs);
+
+            if (CodeGates.IsCodeTool(descriptor.Name) && waitSeconds > 0)
+                return Math.Min(waitSeconds * 1000, IpcConstants.MaxRequestTimeoutMs);
+
+            return budget;
         }
 
         private static JsonValue ToolError(string message, string code = null)

@@ -32,4 +32,15 @@
     <ProjectReference Include="..\AB.RevitMcp.Ipc\AB.RevitMcp.Ipc.csproj" />
   </ItemGroup>
 
+  <!--
+    Roslyn, for revit_execute_code on Revit 2025+ (which have no C# compiler of their own). It
+    lives HERE, in the server's own process, and never in Revit.exe: other add-ins already load
+    their own Roslyn into Revit (pyRevit, other bridges), and a second copy there would bind to
+    whichever loaded first. The add-in only receives the compiled assembly. Loaded lazily, the
+    first time a snippet is compiled.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
+  </ItemGroup>
+
 </Project>

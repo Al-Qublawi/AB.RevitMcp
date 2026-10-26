@@ -21,6 +21,10 @@ namespace AB.RevitMcp.Contracts.Protocol
         public const string NotConnected = "NOT_CONNECTED";
         public const string ProtocolError = "PROTOCOL_ERROR";
         public const string Internal = "INTERNAL_ERROR";
+        /// <summary>One of the three gates of the code tools is closed (server flag, ribbon switch, confirm).</summary>
+        public const string GateClosed = "GATE_CLOSED";
+        /// <summary>revit_get_job_result was given an id this Revit session does not know.</summary>
+        public const string UnknownJob = "UNKNOWN_JOB";
     }
 
     /// <summary>A single tool invocation travelling from the MCP server to the Revit add-in.</summary>
@@ -32,6 +36,12 @@ namespace AB.RevitMcp.Contracts.Protocol
         public int TimeoutMs = IpcConstants.DefaultRequestTimeoutMs;
         public string ClientName;
 
+        /// <summary>
+        /// Data the MCP server attaches beside the arguments, outside the tool's schema: the
+        /// assembly it compiled from a revit_execute_code snippet for Revit 2025+.
+        /// </summary>
+        public JsonValue Payload = JsonValue.Null;
+
         public JsonValue ToJson()
         {
             JsonValue o = JsonValue.NewObject();
@@ -41,6 +51,7 @@ namespace AB.RevitMcp.Contracts.Protocol
             o.Set("args", Arguments ?? JsonValue.NewObject());
             o.Set("timeoutMs", TimeoutMs);
             if (!string.IsNullOrEmpty(ClientName)) o.Set("client", ClientName);
+            if (Payload != null && !Payload.IsNull) o.Set("payload", Payload);
             return o;
         }
 
@@ -56,6 +67,7 @@ namespace AB.RevitMcp.Contracts.Protocol
             if (t > IpcConstants.MaxRequestTimeoutMs) t = IpcConstants.MaxRequestTimeoutMs;
             r.TimeoutMs = t;
             r.ClientName = v["client"].AsString(null);
+            r.Payload = v["payload"];
             return r;
         }
     }

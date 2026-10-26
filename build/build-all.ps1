@@ -3,7 +3,7 @@
     Builds the AB Revit MCP solution for every installed Revit release, plus the MCP server.
 
 .DESCRIPTION
-    Revit 2020-2024 run on .NET Framework 4.8; Revit 2025+ run on .NET 8. This script picks the
+    Revit 2020-2024 run on .NET Framework 4.8; Revit 2025-2026 on .NET 8; Revit 2027 on .NET 10. This script picks the
     right target framework per release, skips releases that are not installed, and drops
     everything into artifacts\<Configuration>\.
 
@@ -16,7 +16,7 @@ param(
     [ValidateSet('Debug', 'Release')]
     [string] $Configuration = 'Release',
 
-    [int[]] $Versions = @(2020, 2021, 2022, 2023, 2024, 2025, 2026),
+    [int[]] $Versions = @(2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027),
 
     [string] $RevitProgramRoot = 'C:\Program Files\Autodesk',
 
@@ -33,6 +33,7 @@ $addinProj = Join-Path $repoRoot 'src\AB.RevitMcp.Addin\AB.RevitMcp.Addin.csproj
 $serverProj = Join-Path $repoRoot 'src\AB.RevitMcp.Server\AB.RevitMcp.Server.csproj'
 
 function Get-TargetFramework([int] $version) {
+    if ($version -ge 2027) { return 'net10.0-windows' }
     if ($version -ge 2025) { return 'net8.0-windows' }
     return 'net48'
 }
